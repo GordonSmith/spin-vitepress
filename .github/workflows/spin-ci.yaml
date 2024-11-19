@@ -19,6 +19,14 @@ jobs:
       - name: Checkout sources
         uses: actions/checkout@v4
 
+      - name: Set up os dependencies
+        run: |
+          wget https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-24/wasi-sdk-24.0-x86_64-linux.deb
+          sudo dpkg -i wasi-sdk-24.0-x86_64-linux.deb
+          rm wasi-sdk-24.0-x86_64-linux.deb
+          rustup target add wasm32-wasi
+          cargo install wit-bindgen-cli
+
       - name: Install Node.js
         uses: actions/setup-node@v4
         with:
@@ -33,6 +41,10 @@ jobs:
       - name: Component Dependency Installation
         run: npm ci
         working-directory: .
+
+      - name: Component Dependency Installation
+        run: npm ci
+        working-directory: ./test-ts
 
       - name: Build vitepress
         working-directory: .

@@ -4,7 +4,7 @@ spin_manifest_version = 2
 authors = ["Gordon Smith <GordonJSmith@gmail.com>"]
 description = ""
 name = "vitepress"
-version = "0.1.0"
+version = "0.1.1"
 
 [[trigger.http]]
 route = "/..."
@@ -17,3 +17,41 @@ exclude_files = ["**/node_modules"]
 
 [component.vitepress.build]
 command = "npm run build-docs"
+
+[[trigger.http]]
+route = "/c"
+component = "test-c"
+
+[component.test-c]
+source = "test-c/build/http_root_world.wasm"
+allowed_outbound_hosts = []
+
+[component.test-c.build]
+command = "cmake -S . -B ./build -DCMAKE_TOOLCHAIN_FILE=/opt/wasi-sdk/share/cmake/wasi-sdk.cmake -DCMAKE_BUILD_TYPE=MinSizeRel && cmake --build ./build"
+watch = ["**/*.c*"]
+workdir = "test-c"
+
+[[trigger.http]]
+route = "/rust"
+component = "test-rust"
+
+[component.test-rust]
+source = "test-rust/target/wasm32-wasi/release/test_rust.wasm"
+allowed_outbound_hosts = []
+
+[component.test-rust.build]
+command = "cargo build --target wasm32-wasi --release"
+workdir = "test-rust"
+watch = ["src/**/*.rs", "Cargo.toml"]
+
+[[trigger.http]]
+route = "/ts"
+component = "test-ts"
+
+[component.test-ts]
+source = "test-ts/target/test-ts.wasm"
+allowed_outbound_hosts = []
+
+[component.test-ts.build]
+command = "npm run build"
+workdir = "test-ts"

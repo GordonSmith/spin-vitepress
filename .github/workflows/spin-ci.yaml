@@ -35,6 +35,11 @@ jobs:
         working-directory: .
 
       - name: Build vitepress
-        run: spin build
         working-directory: .
+        run: |
+          spin build
 
+      - name: Deploy
+        uses: fermyon/actions/spin/deploy@v1
+        with:
+          fermyon_token: ${{ secrets.FERMYON_CLOUD }}

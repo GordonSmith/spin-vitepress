@@ -1,0 +1,40 @@
+name: "Spin-CI"
+
+on:
+  push:
+    branches:
+      - "main"
+
+env:
+  NODE_VERSION: "22"
+  SPIN_VERSION: ""
+
+jobs:
+
+  spin:
+    runs-on: "ubuntu-latest"
+    name: Build Spin App
+    steps:
+
+      - name: Checkout sources
+        uses: actions/checkout@v4
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "${{ env.NODE_VERSION }}"
+
+      - name: Install Spin
+        uses: fermyon/actions/spin/setup@v1
+        with:
+          plugins: |
+            js2wasm
+
+      - name: Component Dependency Installation
+        run: npm ci
+        working-directory: .
+
+      - name: Build vitepress
+        run: spin build
+        working-directory: .
+

@@ -1,0 +1,126 @@
+/**
+ * Customize default theme styling by overriding CSS variables:
+ * https://github.com/vuejs/vitepress/blob/main/src/client/theme-default/styles/vars.css
+ */
+
+/**
+ * Colors
+ *
+ * Each colors have exact same color scale system with 3 levels of solid
+ * colors with different brightness, and 1 soft color.
+ * 
+ * - `XXX-1`: The most solid color used mainly for colored text. It must
+ *   satisfy the contrast ratio against when used on top of `XXX-soft`.
+ *
+ * - `XXX-2`: The color used mainly for hover state of the button.
+ *
+ * - `XXX-3`: The color for solid background, such as bg color of the button.
+ *   It must satisfy the contrast ratio with pure white (#ffffff) text on
+ *   top of it.
+ *
+ * - `XXX-soft`: The color used for subtle background such as custom container
+ *   or badges. It must satisfy the contrast ratio when putting `XXX-1` colors
+ *   on top of it.
+ *
+ *   The soft color must be semi transparent alpha channel. This is crucial
+ *   because it allows adding multiple "soft" colors on top of each other
+ *   to create a accent, such as when having inline code block inside
+ *   custom containers.
+ *
+ * - `default`: The color used purely for subtle indication without any
+ *   special meanings attched to it such as bg color for menu hover state.
+ *
+ * - `brand`: Used for primary brand colors, such as link text, button with
+ *   brand theme, etc.
+ *
+ * - `tip`: Used to indicate useful information. The default theme uses the
+ *   brand color for this by default.
+ *
+ * - `warning`: Used to indicate warning to the users. Used in custom
+ *   container, badges, etc.
+ *
+ * - `danger`: Used to show error, or dangerous message to the users. Used
+ *   in custom container, badges, etc.
+ * -------------------------------------------------------------------------- */
+
+
+
+:root {
+    --vp-c-brand-1: #4B3621;
+    --vp-c-brand-2: #8B4513;
+    --vp-c-brand-3: #D2B48C;
+    --vp-c-brand-4: #fefcee;
+}
+
+:root.dark {
+    --vp-c-brand-0: #fefcee;
+    --vp-c-brand-1: #D2B48C;
+    --vp-c-brand-2: #8B4513;
+    --vp-c-brand-3: #4B3621;
+}
+
+:root {
+    --vp-home-hero-name-color: transparent;
+    --vp-home-hero-name-background: -webkit-linear-gradient(120deg,
+            #b46e56 30%,
+            #4B3621);
+
+    --vp-home-hero-image-background-image: linear-gradient(-45deg,
+            #4B3621 50%,
+            #b46e56 50%);
+    --vp-home-hero-image-filter: blur(44px);
+}
+
+:root.dark {
+    --vp-home-hero-name-color: transparent;
+    --vp-home-hero-name-background: -webkit-linear-gradient(120deg,
+            #fefcee 30%,
+            #b46e56);
+
+    --vp-home-hero-image-background-image: linear-gradient(-45deg,
+            #fefcee 50%,
+            #b46e56 50%);
+    --vp-home-hero-image-filter: blur(44px);
+}
+
+@media (min-width: 640px) {
+    :root {
+        --vp-home-hero-image-filter: blur(56px);
+    }
+}
+
+@media (min-width: 960px) {
+    :root {
+        --vp-home-hero-image-filter: blur(68px);
+    }
+}
+
+:root {
+    --theme-foreground: #1b1e23;
+    --theme-foreground-focus: var(--vp-c-brand-3);
+    --theme-background-a: #ffffff;
+    --theme-background-b: color-mix(in srgb, var(--theme-foreground) 4%, var(--theme-background-a));
+    --theme-background: var(--theme-background-a);
+    --theme-background-alt: var(--theme-background-b);
+    --theme-foreground-alt: color-mix(in srgb, var(--theme-foreground) 90%, var(--theme-background-a));
+    --theme-foreground-muted: color-mix(in srgb, var(--theme-foreground) 60%, var(--theme-background-a));
+    --theme-foreground-faint: color-mix(in srgb, var(--theme-foreground) 50%, var(--theme-background-a));
+    --theme-foreground-fainter: color-mix(in srgb, var(--theme-foreground) 30%, var(--theme-background-a));
+    --theme-foreground-faintest: color-mix(in srgb, var(--theme-foreground) 14%, var(--theme-background-a));
+    color-scheme: light;
+}
+
+:root.dark {
+    --theme-foreground: #ffffff;
+    --theme-foreground-focus: var(--vp-c-brand-4);
+    --theme-background-a: #000000;
+    --theme-background-b: color-mix(in srgb, var(--theme-foreground) 15%, var(--theme-background-a));
+    --theme-background: var(--theme-background-a);
+    --theme-background-alt: var(--theme-background-b);
+    --theme-foreground-alt: color-mix(in srgb, var(--theme-foreground) 90%, var(--theme-background-a));
+    --theme-foreground-muted: color-mix(in srgb, var(--theme-foreground) 60%, var(--theme-background-a));
+    --theme-foreground-faint: color-mix(in srgb, var(--theme-foreground) 50%, var(--theme-background-a));
+    --theme-foreground-fainter: color-mix(in srgb, var(--theme-foreground) 50%, var(--theme-background-a));
+    --theme-foreground-faintest: color-mix(in srgb, var(--theme-foreground) 50%, var(--theme-background-a));
+    color-scheme: dark;
+}

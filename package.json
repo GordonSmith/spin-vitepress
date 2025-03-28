@@ -13,6 +13,6 @@
     },
     "dependencies": {},
     "devDependencies": {
-        "vitepress": "1.5.0"
+        "vitepress": "1.6.3"
     }
 }

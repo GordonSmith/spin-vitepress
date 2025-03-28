@@ -2,3 +2,5 @@
 .vitepress/cache/
 .vitepress/dist/
 node_modules/
+.spin-aka/
+test-c/wit-full

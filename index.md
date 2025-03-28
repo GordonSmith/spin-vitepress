@@ -20,12 +20,12 @@ hero:
 features:
   - title: Rust Sample 🦀
     details: Simple Rust http server
-    link: https://vitepress.fermyon.app/rust
+    link: /rust
   - title: TypeScript Sample 📜
     details: Simple TypeScript http server
-    link: https://vitepress.fermyon.app/ts
+    link: /ts
   - title: C++ Sample 
     details: Simple C++ http server
-    link: https://vitepress.fermyon.app/c
+    link: /c
 ---
 

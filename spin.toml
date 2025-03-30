@@ -36,11 +36,11 @@ route = "/rust"
 component = "test-rust"
 
 [component.test-rust]
-source = "test-rust/target/wasm32-wasi/release/test_rust.wasm"
+source = "test-rust/target/wasm32-wasip1/release/test_rust.wasm"
 allowed_outbound_hosts = []
 
 [component.test-rust.build]
-command = "cargo build --target wasm32-wasi --release"
+command = "cargo build --target wasm32-wasip1 --release"
 workdir = "test-rust"
 watch = ["src/**/*.rs", "Cargo.toml"]
 

@@ -2,14 +2,34 @@
     "version": "2.0.0",
     "tasks": [
         {
-            "label": "Run Dev Docs",
+            "label": "serve-docs",
             "type": "npm",
-            "script": "dev-docs",
+            "script": "serve-docs",
+            "group": {
+                "kind": "build"
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "serve-spin",
+            "type": "npm",
+            "script": "serve-spin",
+            "group": {
+                "kind": "build"
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "build-local-dev-server",
+            "dependsOn": [
+                "serve-docs",
+                "serve-spin"
+            ],
             "group": {
                 "kind": "build",
                 "isDefault": true
             },
             "problemMatcher": []
         }
-    ]
+    ],
 }

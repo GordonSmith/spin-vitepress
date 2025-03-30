@@ -21,11 +21,14 @@ features:
   - title: Rust Sample 🦀
     details: Simple Rust http server
     link: /rust
+    target: _top
   - title: TypeScript Sample 📜
     details: Simple TypeScript http server
     link: /ts
+    target: _top
   - title: C++ Sample 
     details: Simple C++ http server
     link: /c
+    target: _top
 ---
 

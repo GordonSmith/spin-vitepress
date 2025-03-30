@@ -24,7 +24,7 @@ jobs:
           wget https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-24/wasi-sdk-24.0-x86_64-linux.deb
           sudo dpkg -i wasi-sdk-24.0-x86_64-linux.deb
           rm wasi-sdk-24.0-x86_64-linux.deb
-          rustup target add wasm32-wasi
+          rustup target add wasm32-wasip1
           cargo install wit-bindgen-cli
 
       - name: Install Node.js

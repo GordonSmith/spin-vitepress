@@ -27,7 +27,7 @@ source = "test-c/build/http_root_world.wasm"
 allowed_outbound_hosts = []
 
 [component.test-c.build]
-command = "cmake -S . -B ./build -DCMAKE_TOOLCHAIN_FILE=/opt/wasi-sdk/share/cmake/wasi-sdk.cmake -DCMAKE_BUILD_TYPE=MinSizeRel && cmake --build ./build"
+command = "cmake -S . -B ./build -DCMAKE_TOOLCHAIN_FILE=../vcpkg_installed/x64-linux/wasi-sdk/share/cmake/wasi-sdk.cmake -DCMAKE_BUILD_TYPE=MinSizeRel && cmake --build ./build"
 watch = ["**/*.c*"]
 workdir = "test-c"
 
@@ -41,17 +41,19 @@ allowed_outbound_hosts = []
 
 [component.test-rust.build]
 command = "cargo build --target wasm32-wasip1 --release"
-workdir = "test-rust"
 watch = ["src/**/*.rs", "Cargo.toml"]
+workdir = "test-rust"
 
 [[trigger.http]]
-route = "/ts"
+route = "/ts/..."
 component = "test-ts"
 
 [component.test-ts]
-source = "test-ts/target/test-ts.wasm"
+source = "test-ts/dist/test-ts.wasm"
+exclude_files = ["**/node_modules"]
 allowed_outbound_hosts = []
 
 [component.test-ts.build]
-command = "npm run build"
+command = ["npm install", "npm run build"]
+watch = ["src/**/*.ts"]
 workdir = "test-ts"

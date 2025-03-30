@@ -2,7 +2,7 @@ const path = require('path');
 const SpinSdkPlugin = require("@fermyon/spin-sdk/plugins/webpack")
 
 module.exports = {
-    entry: './src/spin.ts',
+    entry: './src/index.ts',
     experiments: {
         outputModule: true,
     },
@@ -19,8 +19,8 @@ module.exports = {
         extensions: ['.tsx', '.ts', '.js'],
     },
     output: {
-        path: path.resolve(__dirname, './'),
-        filename: 'dist.js',
+        path: path.resolve(__dirname, './build'),
+        filename: 'bundle.js',
         module: true,
         library: {
             type: "module",
@@ -32,4 +32,7 @@ module.exports = {
     optimization: {
         minimize: false
     },
+    performance: {
+        hints: false,
+    }
 };

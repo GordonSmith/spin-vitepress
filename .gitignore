@@ -1,6 +1,8 @@
 .spin/
+.spin-aka/
 .vitepress/cache/
 .vitepress/dist/
 node_modules/
-.spin-aka/
 test-c/wit-full
+vcpkg/
+vcpkg_installed/

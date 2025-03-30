@@ -26,5 +26,6 @@ export default defineConfig({
         ]
     },
 
-    cleanUrls: true
+    cleanUrls: true,
+    srcExclude: ["vcpkg/**"],
 })

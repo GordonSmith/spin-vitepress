@@ -1,10 +1,10 @@
 cmake_minimum_required(VERSION 3.13)
 project(HelloWasm VERSION 0.1.0)
 
-set(WASI_SDK_DIR /opt/wasi-sdk)
-set(CMAKE_C_COMPILER ${WASI_SDK_DIR}/bin/clang)
-set(CMAKE_AR ${WASI_SDK_DIR}/bin/ar)
-set(CMAKE_C_FLAGS "-target wasm32-wasip2 -Wunused")
+# set(WASI_SDK_DIR ../vcpkg_installed/x64-linux/wasi-sdk)
+# set(CMAKE_C_COMPILER ${WASI_SDK_DIR}/bin/clang)
+# set(CMAKE_AR ${WASI_SDK_DIR}/bin/ar)
+# set(CMAKE_C_FLAGS "-target wasm32-wasip2 -Wunused")
 
 add_custom_command(
     OUTPUT 

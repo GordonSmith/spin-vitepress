@@ -1,5 +1,4 @@
-.spin/
-.spin-aka/
+.spin/logs
 .vitepress/cache/
 .vitepress/dist/
 node_modules/

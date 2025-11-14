@@ -54,7 +54,19 @@ jobs:
         run: |
           spin build
 
+      - name: Install spin aka plugin
+        run: spin plugin install cloud --yes
+
       - name: Deploy
         uses: fermyon/actions/spin/deploy@v1
         with:
           fermyon_token: ${{ secrets.FERMYON_CLOUD }}
+
+      - name: Install spin aka plugin
+        run: spin plugin install aka --yes
+
+      - name: Login to Fermyon Wasm Functions
+        run: spin aka login --token ${{ secrets.SPIN_AKA_ACCESS_TOKEN }}
+
+      - name: Deploy to Fermyon Wasm Functions
+        run: spin aka deploy --no-confirm

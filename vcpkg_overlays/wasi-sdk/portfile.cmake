@@ -2,23 +2,22 @@
 
 if(APPLE)
     vcpkg_download_distfile(ARCHIVE
-        URLS "https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-25/wasi-sdk-${VERSION}-arm64-macos.tar.gz"
-        FILENAME "wasi-sdk-${VERSION}-x86_64-linux.tar.gz"
-        SHA512 fa4852de1995eaaf5aa57dab9896604a27f157b6113ca0daa27fe7588f4276e18362e650bdb6c65fd83f14d4b8347f8134c9b531a8b872ad83c18d481eeef6c5
+        URLS "https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-30/wasi-sdk-${VERSION}-arm64-macos.tar.gz"
+        FILENAME "wasi-sdk-${VERSION}-arm64-macos.tar.gz"
+        SHA512 0
     )
 elseif(UNIX)
-vcpkg_download_distfile(ARCHIVE
-    URLS "https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-25/wasi-sdk-${VERSION}-x86_64-linux.tar.gz"
-    FILENAME "wasi-sdk-${VERSION}-x86_64-linux.tar.gz"
-    SHA512 716acc4b737ad6f51c6b32c3423612c03df9a3165bde3d6e24df5c86779b8be9463f5a79e620f2fc49707275563a6c9710242caca27e1ad9dd2c69e8fce8a766
-)
-
+    vcpkg_download_distfile(ARCHIVE
+        URLS "https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-30/wasi-sdk-${VERSION}-x86_64-linux.tar.gz"
+        FILENAME "wasi-sdk-${VERSION}-x86_64-linux.tar.gz"
+        SHA512 9b8dc1cec71aa9e870840b30f2b7307d6b48f965d50b724926745780e4e76411f5eb97e443970ecdead90a4932669cc18ae506439f22a24d06e2e8fe44d220b3
+    )
 elseif(WIN32)
-vcpkg_download_distfile(ARCHIVE
-    URLS "https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-25/wasi-sdk-${VERSION}-x86_64-windows.tar.gz"
-    FILENAME "wasi-sdk-${VERSION}-x86_64-windows.tar.gz"
-    SHA512 e8bdae827dbbb967bf9815603aeff76ac40344c79cf6a1c388e63931c77cdc5560860c6f2ec74f3c7895fab08b93940f60e9e26365b6f4ba354ca3a921803be7
-)
+    vcpkg_download_distfile(ARCHIVE
+        URLS "https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-30/wasi-sdk-${VERSION}-x86_64-windows.tar.gz"
+        FILENAME "wasi-sdk-${VERSION}-x86_64-windows.tar.gz"
+        SHA512 0
+    )
 endif()
 
 vcpkg_extract_source_archive_ex(

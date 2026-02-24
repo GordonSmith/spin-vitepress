@@ -14,14 +14,14 @@
     "license": "ISC",
     "devDependencies": {
         "mkdirp": "3.0.1",
-        "ts-loader": "9.5.2",
-        "typescript": "5.8.2",
-        "webpack": "5.98.0",
+        "ts-loader": "9.5.4",
+        "typescript": "5.9.3",
+        "webpack": "5.105.2",
         "webpack-cli": "6.0.1",
         "@fermyon/knitwit": "0.3.1"
     },
     "dependencies": {
         "@fermyon/spin-sdk": "3.2.0",
-        "itty-router": "5.0.18"
+        "itty-router": "5.0.22"
     }
 }

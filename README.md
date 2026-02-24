@@ -11,12 +11,6 @@ A VitePress documentation site built with Spin WebAssembly components, demonstra
 
 ### Prerequisites
 
-- **WASI SDK 24**: Required for WebAssembly compilation
-  ```bash
-  wget https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-24/wasi-sdk-24.0-x86_64-linux.deb
-  sudo dpkg -i wasi-sdk-24.0-x86_64-linux.deb
-  ```
-
 - **Rust**: With `wasm32-wasip1` target and WIT bindings
   ```bash
   rustup target add wasm32-wasip1

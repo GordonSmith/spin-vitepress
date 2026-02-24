@@ -21,11 +21,8 @@ jobs:
         with:
           submodules: true
 
-      - name: Install os dependencies
+      - name: Install rust dependencies
         run: |
-          wget https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-24/wasi-sdk-24.0-x86_64-linux.deb
-          sudo dpkg -i wasi-sdk-24.0-x86_64-linux.deb
-          rm wasi-sdk-24.0-x86_64-linux.deb
           rustup target add wasm32-wasip1
           cargo install wit-bindgen-cli
 
@@ -46,27 +43,27 @@ jobs:
             js2wasm
 
       - name: Component Dependency Installation
-        run: npm ci
-        working-directory: .
+        run: |
+          npm ci
 
       - name: Build vitepress
-        working-directory: .
         run: |
           spin build
 
+      - name: Install spin cloud plugin
+        run: |
+          spin plugin install cloud --yes
+
+      - name: Deploy to Fermyon Cloud
+        run: |
+          spin cloud login --token ${{ secrets.FERMYON_CLOUD }}
+          spin cloud deploy -f spin.toml
+
       - name: Install spin aka plugin
-        run: spin plugin install cloud --yes
-
-      - name: Deploy
-        uses: fermyon/actions/spin/deploy@v1
-        with:
-          fermyon_token: ${{ secrets.FERMYON_CLOUD }}
-
-      - name: Install spin aka plugin
-        run: spin plugin install aka --yes
-
-      - name: Login to Fermyon Wasm Functions
-        run: spin aka login --token ${{ secrets.SPIN_AKA_ACCESS_TOKEN }}
+        run: |
+          spin plugin install aka --yes
 
       - name: Deploy to Fermyon Wasm Functions
-        run: spin aka deploy --no-confirm
+        run: |
+          spin aka login --token ${{ secrets.SPIN_AKA_ACCESS_TOKEN }}
+          spin aka deploy --no-confirm

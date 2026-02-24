@@ -1,6 +1,6 @@
 {
   "name": "wasi-sdk",
-  "version-string": "25.0",
+  "version-string": "30.0",
   "description": "Wasi SDK for building wasm from C++.",
   "homepage": "https://github.com/WebAssembly/wasi-sdk",
   "license": "Apache-2.0"

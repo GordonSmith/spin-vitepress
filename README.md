@@ -11,9 +11,9 @@ A VitePress documentation site built with Spin WebAssembly components, demonstra
 
 ### Prerequisites
 
-- **Rust**: With `wasm32-wasip1` target and WIT bindings
+- **Rust**: With `wasm32-wasip2` target and WIT bindings
   ```bash
-  rustup target add wasm32-wasip1
+  rustup target add wasm32-wasip2
   cargo install wit-bindgen-cli
   ```
 

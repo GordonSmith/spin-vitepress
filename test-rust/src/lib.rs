@@ -1,13 +1,15 @@
-use spin_sdk::http::{IntoResponse, Request, Response};
-use spin_sdk::http_component;
+use spin_sdk::http::{send, EmptyBody, IntoResponse, Request, Response};
+use spin_sdk::http_service;
 
-/// A simple Spin HTTP component.
-#[http_component]
-fn handle_test_rust(req: Request) -> anyhow::Result<impl IntoResponse> {
-    println!("Handling request to {:?}", req.header("spin-full-url"));
-    Ok(Response::builder()
-        .status(200)
-        .header("content-type", "text/plain")
-        .body("Hello, Fermyon")
-        .build())
+#[http_service]
+async fn handle_hello_world(_req: Request) -> anyhow::Result<impl IntoResponse> {
+    // Create the outbound request object
+    let outgoing = Request::get("https://random-data-api.fermyon.app/animals/json")
+        .body(EmptyBody::new())
+        .unwrap();
+
+    // Send the request and await the response
+    let resp: Response = send(outgoing).await?;
+
+    Ok(resp)
 }

@@ -3,7 +3,9 @@
     "version": "0.0.0",
     "private": true,
     "scripts": {
-        "clean": "rimraf vcpkg/vcpkg vcpkg_installed test-c/build test-rust/target test-ts/build test-ts/dist",
+        "clean": "rimraf test-c/build test-rust/target test-ts/build test-ts/dist",
+        "clean-vcpkg": "rimraf vcpkg/vcpkg vcpkg_installed",
+        "clean-all": "run-p clean clean-vcpkg",
         "build-docs": "vitepress build",
         "serve-docs": "vitepress dev",
         "preview-docs": "vitepress preview",
@@ -11,8 +13,10 @@
         "serve-spin": "spin up",
         "build": "run-s build-spin",
         "serve": "run-p serve-docs serve-spin",
-        "update": "npx -y npm-check-updates -u -t minor",
-        "update-major": "npx -y npm-check-updates -u"
+        "update": "npx -y npm-check-updates -u -t minor && cd test-ts && npx -y npm-check-updates -u -t minor",
+        "update-major": "npx -y npm-check-updates -u && cd test-ts && npx -y npm-check-updates -u",
+        "update-rust": "cd test-rust && cargo update && cargo upgrade --incompatible",
+        "update-ts": "cd test-ts && npm run update-major && npm install"
     },
     "dependencies": {},
     "devDependencies": {

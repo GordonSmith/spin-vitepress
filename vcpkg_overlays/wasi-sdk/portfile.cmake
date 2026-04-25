@@ -8,9 +8,9 @@ if(APPLE)
     )
 elseif(UNIX)
     vcpkg_download_distfile(ARCHIVE
-        URLS "https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-30/wasi-sdk-${VERSION}-x86_64-linux.tar.gz"
+        URLS "https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-32/wasi-sdk-${VERSION}-x86_64-linux.tar.gz"
         FILENAME "wasi-sdk-${VERSION}-x86_64-linux.tar.gz"
-        SHA512 9b8dc1cec71aa9e870840b30f2b7307d6b48f965d50b724926745780e4e76411f5eb97e443970ecdead90a4932669cc18ae506439f22a24d06e2e8fe44d220b3
+        SHA512 f77c08d1eb0f8e765bed4955d4794b33bb38149df5a144bebbe43e91fce3cfda7210cdf57073c0ff23c1d3c68105b6c69b4782af1643a0be2f3310001a2398f0
     )
 elseif(WIN32)
     vcpkg_download_distfile(ARCHIVE

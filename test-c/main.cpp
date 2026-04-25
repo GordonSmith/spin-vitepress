@@ -4,7 +4,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
-#include "root.h"
+#include "spin3_http.h"
 
 #define MAX_PATH 1024
 #define MAX_READ_BYTES (8 * 1024 * 1024)
@@ -17,16 +17,16 @@ static const struct
 {
     const char *method;
 } http_method_map[] = {
-    [WASI_HTTP_TYPES_METHOD_GET] = {"GET"},
-    [WASI_HTTP_TYPES_METHOD_HEAD] = {"HEAD"},
-    [WASI_HTTP_TYPES_METHOD_POST] = {"POST"},
-    [WASI_HTTP_TYPES_METHOD_PUT] = {"PUT"},
-    [WASI_HTTP_TYPES_METHOD_DELETE] = {"DELETE"},
-    [WASI_HTTP_TYPES_METHOD_CONNECT] = {"CONNECT"},
-    [WASI_HTTP_TYPES_METHOD_OPTIONS] = {"OPTIONS"},
-    [WASI_HTTP_TYPES_METHOD_TRACE] = {"TRACE"},
-    [WASI_HTTP_TYPES_METHOD_PATCH] = {"PATCH"},
-    [WASI_HTTP_TYPES_METHOD_OTHER] = {"OTHER"}};
+    {"GET"},
+    {"HEAD"},
+    {"POST"},
+    {"PUT"},
+    {"DELETE"},
+    {"CONNECT"},
+    {"OPTIONS"},
+    {"TRACE"},
+    {"PATCH"},
+    {"OTHER"}};
 
 void exports_wasi_http_incoming_handler_handle(
     exports_wasi_http_incoming_handler_own_incoming_request_t request,
@@ -50,18 +50,18 @@ void exports_wasi_http_incoming_handler_handle(
     wasi_http_types_borrow_outgoing_body_t b_body;
     wasi_io_streams_own_output_stream_t out_stream;
     wasi_io_streams_borrow_output_stream_t b_out_stream;
-    root_list_u8_t stream_data;
+    spin3_http_list_u8_t stream_data;
     wasi_io_streams_stream_error_t stream_err;
     wasi_http_types_header_error_t hdr_err;
     wasi_http_types_field_key_t key;
     wasi_http_types_field_value_t value;
     wasi_http_types_method_t method;
-    root_list_tuple2_field_key_field_value_t fvk;
+    spin3_http_list_tuple2_field_name_field_value_t fvk;
     wasi_http_types_own_input_stream_t in_stream;
     wasi_io_streams_borrow_input_stream_t b_in_stream;
-    root_list_u8_t data;
+    spin3_http_list_u8_t data;
     wasi_io_streams_stream_error_t in_stream_err;
-    root_string_t prstr;
+    spin3_http_string_t prstr;
     size_t content_length;
     bool ok;
 
@@ -97,7 +97,7 @@ void exports_wasi_http_incoming_handler_handle(
         }
     }
 
-    root_list_tuple2_field_key_field_value_free(&fvk);
+    spin3_http_list_tuple2_field_name_field_value_free(&fvk);
 
     wasi_http_types_method_incoming_request_consume(b_req, &r_body);
     b_r_body = wasi_http_types_borrow_incoming_body(r_body);
@@ -118,7 +118,7 @@ void exports_wasi_http_incoming_handler_handle(
             bytes_to_read = MAX_READ_BYTES;
         }
 
-        root_list_u8_t temp_data = {0};
+        spin3_http_list_u8_t temp_data = {0};
         ok = wasi_io_streams_method_input_stream_blocking_read(b_in_stream, bytes_to_read, &temp_data, &in_stream_err);
         if (!ok)
         {
@@ -138,7 +138,7 @@ void exports_wasi_http_incoming_handler_handle(
         memcpy(data.ptr + data.len, temp_data.ptr, temp_data.len);
         data.len += temp_data.len;
 
-        root_list_u8_free(&temp_data);
+        spin3_http_list_u8_free(&temp_data);
     }
 
     if (method.tag == WASI_HTTP_TYPES_METHOD_POST || method.tag == WASI_HTTP_TYPES_METHOD_PUT)
@@ -156,9 +156,9 @@ void exports_wasi_http_incoming_handler_handle(
     fields = wasi_http_types_constructor_fields();
     b_fields = wasi_http_types_borrow_fields(fields);
 
-    root_string_set((root_string_t *)&key, "Content-Length");
+    spin3_http_string_set((spin3_http_string_t *)&key, "Content-Length");
     sprintf(clen, "%zu", size);
-    root_string_set((root_string_t *)&value, clen);
+    spin3_http_string_set((spin3_http_string_t *)&value, clen);
 
     wasi_http_types_method_fields_append(b_fields, &key, &value, &hdr_err);
 

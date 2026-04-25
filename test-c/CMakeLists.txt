@@ -8,17 +8,17 @@ project(HelloWasm VERSION 0.1.0)
 
 add_custom_command(
     OUTPUT 
-        ${CMAKE_CURRENT_BINARY_DIR}/root_component_type.o
-        ${CMAKE_CURRENT_BINARY_DIR}/root.c
-    COMMAND wit-bindgen c --autodrop-borrows yes ${CMAKE_CURRENT_SOURCE_DIR}/wit
-    DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/wit/world.wit
-    COMMENT "Generating root_component_type.o"
+        ${CMAKE_CURRENT_BINARY_DIR}/spin3_http_component_type.o
+        ${CMAKE_CURRENT_BINARY_DIR}/spin3_http.c
+    COMMAND wit-bindgen c --autodrop-borrows yes --world spin3-http ${CMAKE_CURRENT_SOURCE_DIR}/../test-ts/node_modules/@fermyon/spin-sdk/bin/wit
+    DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/../test-ts/node_modules/@fermyon/spin-sdk/bin/wit/world.wit
+    COMMENT "Generating spin3_http_component_type.o"
 )
 
 add_executable(http_root_world.wasm
     ${CMAKE_CURRENT_SOURCE_DIR}/main.cpp
-    ${CMAKE_CURRENT_BINARY_DIR}/root.c
-    ${CMAKE_CURRENT_BINARY_DIR}/root_component_type.o
+    ${CMAKE_CURRENT_BINARY_DIR}/spin3_http.c
+    ${CMAKE_CURRENT_BINARY_DIR}/spin3_http_component_type.o
 )
 
 target_include_directories(http_root_world.wasm 

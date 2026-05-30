@@ -1,3 +1,6 @@
 [submodule "vcpkg"]
 	path = vcpkg
 	url = https://github.com/microsoft/vcpkg.git
+[submodule "refs/http-auth-middleware"]
+	path = refs/http-auth-middleware
+	url = git@github.com:spinframework/http-auth-middleware.git

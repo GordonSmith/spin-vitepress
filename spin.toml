@@ -4,14 +4,14 @@ spin_manifest_version = 2
 authors = ["Gordon Smith <GordonJSmith@gmail.com>"]
 description = ""
 name = "vitepress"
-version = "0.1.1"
+version = "0.2.0"
 
 [[trigger.http]]
 route = "/..."
 component = "vitepress"
 
 [component.vitepress]
-source = { url = "https://github.com/fermyon/spin-fileserver/releases/download/v0.1.0/spin_static_fs.wasm", digest = "sha256:96c76d9af86420b39eb6cd7be5550e3cb5d4cc4de572ce0fd1f6a29471536cb4" }
+source = { url = "https://github.com/spinframework/spin-fileserver/releases/download/v0.3.0/spin_static_fs.wasm", digest = "sha256:ef88708817e107bf49985c7cefe4dd1f199bf26f6727819183d5c996baa3d148" }
 files = [{ source = ".vitepress/dist/", destination = "/" }]
 exclude_files = ["**/node_modules"]
 
@@ -57,3 +57,18 @@ allowed_outbound_hosts = []
 command = ["npm install", "npm run build"]
 watch = ["src/**/*.ts"]
 workdir = "test-ts"
+
+# [[trigger.http]]
+# route = "/login"
+# component = "frontend"
+# executor = { type = "wasip3-unstable" }
+
+# [component.frontend]
+# source = "p3/authed_app.wasm"  # for P3 we have to post-process compose in build.sh
+# allowed_outbound_hosts = ["https://github.com", "https://api.github.com"]
+
+# [component.frontend.build]
+# command = "./build.sh"
+# Unused because for now we have to precompose in build.sh
+# [component.frontend.dependencies]
+# "wasi:http/incoming-handler@0.2.0" = { path = "target/wasm32-wasip1/release/example.wasm" }

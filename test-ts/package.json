@@ -14,10 +14,10 @@
     "license": "ISC",
     "devDependencies": {
         "mkdirp": "3.0.1",
-        "ts-loader": "9.5.7",
+        "ts-loader": "9.6.0",
         "typescript": "6.0.3",
-        "webpack": "5.106.2",
-        "webpack-cli": "7.0.2",
+        "webpack": "5.107.2",
+        "webpack-cli": "7.0.3",
         "@fermyon/knitwit": "0.3.1"
     },
     "dependencies": {

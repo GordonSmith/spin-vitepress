@@ -8,7 +8,7 @@ on:
 env:
   NODE_VERSION: "24"
   RUST_TARGET: "wasm32-wasip2"
-  SPIN_VERSION: ""
+  SPIN_VERSION: "4.0.0"
 
 jobs:
 
@@ -21,6 +21,23 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: true
+
+      - name: Install Spin
+        uses: fermyon/actions/spin/setup@v1
+        with:
+          version: "v${{ env.SPIN_VERSION }}"
+          plugins: |
+            js2wasm
+
+      - name: Install spin cloud plugin
+        run: |
+          spin plugin install cloud --yes
+          spin cloud login --token ${{ secrets.FERMYON_CLOUD }}
+
+      - name: Install spin aka plugin
+        run: |
+          spin plugin install aka --yes
+          spin aka auth login --token ${{ secrets.SPIN_AKA_ACCESS_TOKEN }}
 
       - name: Install Node.js
         uses: actions/setup-node@v4
@@ -59,12 +76,6 @@ jobs:
           ./vcpkg/bootstrap-vcpkg.sh
           ./vcpkg/vcpkg install
 
-      - name: Install Spin
-        uses: fermyon/actions/spin/setup@v1
-        with:
-          plugins: |
-            js2wasm
-
       - name: Install root Node dependencies
         run: |
           npm ci
@@ -78,20 +89,20 @@ jobs:
         run: |
           spin build
 
-      - name: Install spin cloud plugin
-        run: |
-          spin plugin install cloud --yes
-
       - name: Deploy to Fermyon Cloud
+        continue-on-error: true
         run: |
-          spin cloud login --token ${{ secrets.FERMYON_CLOUD }}
           spin cloud deploy -f spin.toml
 
-      - name: Install spin aka plugin
-        run: |
-          spin plugin install aka --yes
-
       - name: Deploy to Fermyon Wasm Functions
+        continue-on-error: true
         run: |
-          spin aka login --token ${{ secrets.SPIN_AKA_ACCESS_TOKEN }}
           spin aka deploy --no-confirm
+
+      - name: Upload Spin logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: spin-logs
+          path: .spin/logs/**
+          if-no-files-found: ignore

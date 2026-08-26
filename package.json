@@ -1,6 +1,6 @@
 {
     "name": "spin-vitepress",
-    "version": "0.0.0",
+    "version": "0.2.0",
     "private": true,
     "scripts": {
         "clean": "rimraf test-c/build test-rust/target test-ts/build test-ts/dist",
@@ -15,7 +15,7 @@
         "serve": "run-p serve-docs serve-spin",
         "update": "npx -y npm-check-updates -u -t minor && cd test-ts && npx -y npm-check-updates -u -t minor",
         "update-major": "npx -y npm-check-updates -u && cd test-ts && npx -y npm-check-updates -u",
-        "update-rust": "cd test-rust && cargo update && cargo upgrade --incompatible",
+        "update-rust": "cd test-rust && cargo update",
         "update-ts": "cd test-ts && npm run update-major && npm install && npm update"
     },
     "dependencies": {},

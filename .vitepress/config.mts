@@ -1,4 +1,20 @@
+import { readFileSync } from "node:fs"
 import { defineConfig } from "vitepress"
+
+const spinManifest = readFileSync(new URL("../spin.toml", import.meta.url), "utf-8")
+
+function readSpinApplicationVersion(manifest: string) {
+    const applicationSection = manifest.match(/^\[application\]\s*$(?<body>[\s\S]*?)(?=^\[|\z)/m)?.groups?.body
+    const version = applicationSection?.match(/^\s*version\s*=\s*"([^"]+)"\s*$/m)?.[1]
+
+    if (!version) {
+        throw new Error("Unable to read [application].version from spin.toml")
+    }
+
+    return version
+}
+
+const spinVersion = readSpinApplicationVersion(spinManifest)
 
 // https://vitepress.dev/reference/site-config
 export default defineConfig({
@@ -28,4 +44,9 @@ export default defineConfig({
 
     cleanUrls: true,
     srcExclude: ["vcpkg/**", "refs/**", "test-login/**"],
+    transformPageData(pageData) {
+        if (pageData.relativePath === "index.md") {
+            pageData.frontmatter.hero.text = `Version ${spinVersion}`
+        }
+    },
 })

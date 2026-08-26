@@ -56,7 +56,7 @@ void exports_wasi_http_incoming_handler_handle(
     wasi_http_types_field_key_t key;
     wasi_http_types_field_value_t value;
     wasi_http_types_method_t method;
-    spin3_http_list_tuple2_field_name_field_value_t fvk;
+    wasi_http_types_list_tuple2_field_name_field_value_t fvk;
     wasi_http_types_own_input_stream_t in_stream;
     wasi_io_streams_borrow_input_stream_t b_in_stream;
     spin3_http_list_u8_t data;
@@ -97,7 +97,7 @@ void exports_wasi_http_incoming_handler_handle(
         }
     }
 
-    spin3_http_list_tuple2_field_name_field_value_free(&fvk);
+    wasi_http_types_list_tuple2_field_name_field_value_free(&fvk);
 
     wasi_http_types_method_incoming_request_consume(b_req, &r_body);
     b_r_body = wasi_http_types_borrow_incoming_body(r_body);

@@ -1,0 +1,18 @@
+{
+    "compilerOptions": {
+        "module": "NodeNext",
+        "moduleResolution": "NodeNext",
+        "target": "ES2022",
+        "types": [
+            "node"
+        ],
+        "skipLibCheck": true,
+        "strict": true
+    },
+    "include": [
+        "env.d.ts",
+        ".vitepress/**/*.mts",
+        ".vitepress/**/*.ts",
+        "scripts/**/*.mjs"
+    ]
+}

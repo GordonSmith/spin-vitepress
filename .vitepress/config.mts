@@ -1,10 +1,10 @@
-import { readFileSync } from "node:fs"
+import { readFileSync } from "fs"
 import { defineConfig } from "vitepress"
 
 const spinManifest = readFileSync(new URL("../spin.toml", import.meta.url), "utf-8")
 
 function readSpinApplicationVersion(manifest: string) {
-    const applicationSection = manifest.match(/^\[application\]\s*$(?<body>[\s\S]*?)(?=^\[|\z)/m)?.groups?.body
+    const applicationSection = manifest.match(/^\[application\]\s*$(?<body>[\s\S]*?)(?=^\[|(?![\s\S]))/m)?.groups?.body
     const version = applicationSection?.match(/^\s*version\s*=\s*"([^"]+)"\s*$/m)?.[1]
 
     if (!version) {

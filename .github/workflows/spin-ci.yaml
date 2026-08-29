@@ -5,10 +5,17 @@ on:
     branches:
       - "main"
 
+permissions:
+  contents: write
+
 env:
   NODE_VERSION: "24"
   RUST_TARGET: "wasm32-wasip2"
   SPIN_VERSION: "4.1.0"
+  FERMYON_CLOUD_TOKEN: ${{ secrets.FERMYON_CLOUD }}
+  SPIN_AKA_ACCESS_TOKEN: ${{ secrets.SPIN_AKA_ACCESS_TOKEN }}
+  SPIN_AKA_ACCOUNT_NAME: "gordonsmith"
+  SPIN_AKA_APP_NAME: "vitepress"
 
 jobs:
 
@@ -21,6 +28,7 @@ jobs:
         uses: actions/checkout@v7.0.1
         with:
           submodules: true
+          fetch-depth: 0
 
       - name: Install Spin
         uses: fermyon/actions/spin/setup@v1.0.12
@@ -28,16 +36,6 @@ jobs:
           version: "v${{ env.SPIN_VERSION }}"
           plugins: |
             js2wasm
-
-      - name: Install spin cloud plugin
-        run: |
-          spin plugin install cloud --yes
-          spin cloud login --token ${{ secrets.FERMYON_CLOUD }}
-
-      - name: Install spin aka plugin
-        run: |
-          spin plugin install aka --yes
-          spin aka auth login --token ${{ secrets.SPIN_AKA_ACCESS_TOKEN }}
 
       - name: Install Node.js
         uses: actions/setup-node@v7.0.0
@@ -85,19 +83,80 @@ jobs:
         run: |
           npm ci
 
+      - name: Bump and sync versions
+        run: |
+          npm run version-bump-auto
+          npm run sync-version
+
       - name: Build vitepress
         run: |
           spin build
 
       - name: Deploy to Fermyon Cloud
+        if: ${{ env.FERMYON_CLOUD_TOKEN != '' }}
         continue-on-error: true
         run: |
+          spin plugin install cloud --yes
+          spin cloud login --token "${FERMYON_CLOUD_TOKEN}"
           spin cloud deploy -f spin.toml
 
       - name: Deploy to Fermyon Wasm Functions
+        if: ${{ env.SPIN_AKA_ACCESS_TOKEN != '' }}
+        id: deploy-aka
         continue-on-error: true
         run: |
-          spin aka deploy --no-confirm
+          spin plugin install aka --yes
+          spin aka auth login --token "${SPIN_AKA_ACCESS_TOKEN}"
+          spin aka info
+          rm -f .spin-aka/config.toml
+
+          apps_json="$(spin aka app list --account-name "${SPIN_AKA_ACCOUNT_NAME}" --format json)"
+          app_id="$(printf '%s' "${apps_json}" | node -e '
+            let input = "";
+            process.stdin.on("data", chunk => input += chunk);
+            process.stdin.on("end", () => {
+              const apps = JSON.parse(input || "[]");
+              const app = apps.find(candidate => candidate.name === process.env.SPIN_AKA_APP_NAME);
+              console.log(app?.id ?? app?.app_id ?? app?.appId ?? "");
+            });
+          ')"
+
+          if [[ -n "${app_id}" ]]; then
+            echo "Deploying to existing Akamai Functions app ${SPIN_AKA_APP_NAME} (${app_id})"
+            spin aka deploy --account-name "${SPIN_AKA_ACCOUNT_NAME}" --app-id "${app_id}" --no-confirm --skip-readiness-check
+          else
+            echo "Creating Akamai Functions app ${SPIN_AKA_APP_NAME}"
+            spin aka deploy --account-name "${SPIN_AKA_ACCOUNT_NAME}" --create-name "${SPIN_AKA_APP_NAME}" --no-confirm --skip-readiness-check
+          fi
+
+      - name: Commit version changes
+        run: |
+          if git diff --quiet -- package.json package-lock.json spin.toml; then
+            echo "No version changes to commit"
+            exit 0
+          fi
+
+          version="v$(node -p "require('./package.json').version")"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package.json package-lock.json spin.toml
+          git commit -m "chore(release): ${version} [skip ci]"
+
+          if git rev-parse --verify --quiet "refs/tags/${version}"; then
+            echo "Tag ${version} already exists"
+          else
+            git tag "${version}"
+          fi
+
+          git push
+          git push --tags
+
+      - name: Check Fermyon Wasm Functions deployment
+        if: ${{ steps.deploy-aka.outcome == 'failure' }}
+        run: |
+          echo "Fermyon Wasm Functions deployment failed. See the 'Deploy to Fermyon Wasm Functions' step above for the AKA CLI output."
+          exit 1
 
       - name: Upload Spin logs
         if: always()

@@ -141,9 +141,9 @@ jobs:
           rm -f .spin-aka/config.toml
 
       - name: Check deployment outcomes
-        if: ${{ always() && (steps.deploy-cloud.outcome == 'failure' || steps.deploy-aka.outcome == 'failure') }}
+        if: ${{ always() && steps.deploy-cloud.outcome == 'failure' }}
         run: |
-          echo "A deployment failed. Download the spin-logs artifact for complete diagnostic output."
+          echo "Fermyon Cloud deployment failed. Download the spin-logs artifact for complete diagnostic output."
           exit 1
 
       - name: Commit version changes

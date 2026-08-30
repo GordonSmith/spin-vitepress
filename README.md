@@ -4,8 +4,10 @@ A VitePress documentation site built with Spin WebAssembly components, demonstra
 
 ## Hosted Pages
 
-- [Fermyon Wasm Functions](https://00a2a739-18a1-4f6c-857c-fe9364db866b.fwf.app)
-- [Fermyon Cloud Deployment](https://hosh.ie/)
+| Deployment | Link |
+|-----------|------|
+| **Fermyon Wasm Functions** | [https://00a2a739-18a1-4f6c-857c-fe9364db866b.fwf.app](https://00a2a739-18a1-4f6c-857c-fe9364db866b.fwf.app) |
+| **Fermyon Cloud** | [https://hosh.ie/](https://hosh.ie/) |
 
 ## Developers
 

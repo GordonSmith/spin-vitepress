@@ -110,10 +110,9 @@ jobs:
         id: deploy-aka
         continue-on-error: true
         run: |
-          set -o pipefail
-          mkdir -p ci-logs
-          spin plugin install aka --yes 2>&1 | tee ci-logs/aka-plugin-install.log
-          spin aka deploy --no-confirm 2>&1 | tee ci-logs/aka-deploy.log
+          spin plugin install aka --yes
+          spin aka login --token "${SPIN_AKA_ACCESS_TOKEN}"
+          spin aka deploy --no-confirm
 
       - name: Check deployment outcomes
         if: ${{ always() && steps.deploy-cloud.outcome == 'failure' }}

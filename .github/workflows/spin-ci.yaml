@@ -94,23 +94,33 @@ jobs:
 
       - name: Deploy to Fermyon Cloud
         if: ${{ env.FERMYON_CLOUD_TOKEN != '' }}
+        id: deploy-cloud
         continue-on-error: true
         run: |
-          spin plugin install cloud --yes
+          set -o pipefail
+          mkdir -p ci-logs
+          spin --version | tee ci-logs/spin-version.log
+          spin plugin install cloud --yes 2>&1 | tee ci-logs/cloud-plugin-install.log
+          spin plugins list 2>&1 | tee ci-logs/spin-plugins.log
           spin cloud login --token "${FERMYON_CLOUD_TOKEN}"
-          spin cloud deploy -f spin.toml
+          spin cloud deploy -f spin.toml 2>&1 | tee ci-logs/cloud-deploy.log
 
       - name: Deploy to Fermyon Wasm Functions
         if: ${{ env.SPIN_AKA_ACCESS_TOKEN != '' }}
         id: deploy-aka
         continue-on-error: true
         run: |
-          spin plugin install aka --yes
+          set -o pipefail
+          mkdir -p ci-logs
+          spin --version | tee ci-logs/spin-version.log
+          spin plugin install aka --yes 2>&1 | tee ci-logs/aka-plugin-install.log
+          spin plugins list 2>&1 | tee ci-logs/spin-plugins.log
           spin aka auth login --token "${SPIN_AKA_ACCESS_TOKEN}"
-          spin aka info
+          spin aka info 2>&1 | tee ci-logs/aka-info.log
           rm -f .spin-aka/config.toml
 
-          apps_json="$(spin aka app list --account-name "${SPIN_AKA_ACCOUNT_NAME}" --format json)"
+          apps_json="$(spin aka app list --account-name "${SPIN_AKA_ACCOUNT_NAME}" --format json 2> >(tee ci-logs/aka-app-list.stderr.log >&2))"
+          printf '%s\n' "${apps_json}" | tee ci-logs/aka-app-list.json
           app_id="$(printf '%s' "${apps_json}" | node -e '
             let input = "";
             process.stdin.on("data", chunk => input += chunk);
@@ -123,11 +133,17 @@ jobs:
 
           if [[ -n "${app_id}" ]]; then
             echo "Deploying to existing Akamai Functions app ${SPIN_AKA_APP_NAME} (${app_id})"
-            spin aka deploy --account-name "${SPIN_AKA_ACCOUNT_NAME}" --app-id "${app_id}" --no-confirm --skip-readiness-check
+            spin aka deploy --account-name "${SPIN_AKA_ACCOUNT_NAME}" --app-id "${app_id}" --no-confirm --skip-readiness-check 2>&1 | tee ci-logs/aka-deploy.log
           else
             echo "Creating Akamai Functions app ${SPIN_AKA_APP_NAME}"
-            spin aka deploy --account-name "${SPIN_AKA_ACCOUNT_NAME}" --create-name "${SPIN_AKA_APP_NAME}" --no-confirm --skip-readiness-check
+            spin aka deploy --account-name "${SPIN_AKA_ACCOUNT_NAME}" --create-name "${SPIN_AKA_APP_NAME}" --no-confirm --skip-readiness-check 2>&1 | tee ci-logs/aka-deploy.log
           fi
+
+      - name: Check deployment outcomes
+        if: ${{ always() && (steps.deploy-cloud.outcome == 'failure' || steps.deploy-aka.outcome == 'failure') }}
+        run: |
+          echo "A deployment failed. Download the spin-logs artifact for complete diagnostic output."
+          exit 1
 
       - name: Commit version changes
         run: |
@@ -152,16 +168,13 @@ jobs:
           git push
           git push --tags
 
-      - name: Check Fermyon Wasm Functions deployment
-        if: ${{ steps.deploy-aka.outcome == 'failure' }}
-        run: |
-          echo "Fermyon Wasm Functions deployment failed. See the 'Deploy to Fermyon Wasm Functions' step above for the AKA CLI output."
-          exit 1
-
       - name: Upload Spin logs
         if: always()
         uses: actions/upload-artifact@v7.0.1
         with:
           name: spin-logs
-          path: .spin/logs/**
+          path: |
+            ci-logs/**
+            .spin/logs/**
+            .spin-aka/logs/**
           if-no-files-found: ignore

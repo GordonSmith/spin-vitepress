@@ -117,7 +117,6 @@ jobs:
           spin plugins list 2>&1 | tee ci-logs/spin-plugins.log
           spin aka auth login --token "${SPIN_AKA_ACCESS_TOKEN}"
           spin aka info 2>&1 | tee ci-logs/aka-info.log
-          rm -f .spin-aka/config.toml
 
           apps_json="$(spin aka app list --account-name "${SPIN_AKA_ACCOUNT_NAME}" --format json 2> >(tee ci-logs/aka-app-list.stderr.log >&2))"
           printf '%s\n' "${apps_json}" | tee ci-logs/aka-app-list.json
@@ -138,6 +137,8 @@ jobs:
             echo "Creating Akamai Functions app ${SPIN_AKA_APP_NAME}"
             spin aka deploy --account-name "${SPIN_AKA_ACCOUNT_NAME}" --create-name "${SPIN_AKA_APP_NAME}" --no-confirm --skip-readiness-check 2>&1 | tee ci-logs/aka-deploy.log
           fi
+
+          rm -f .spin-aka/config.toml
 
       - name: Check deployment outcomes
         if: ${{ always() && (steps.deploy-cloud.outcome == 'failure' || steps.deploy-aka.outcome == 'failure') }}

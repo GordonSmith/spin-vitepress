@@ -109,6 +109,8 @@ jobs:
         if: ${{ env.SPIN_AKA_ACCESS_TOKEN != '' }}
         id: deploy-aka
         continue-on-error: true
+        env:
+          SPIN_AKA_TOKEN: ${{ env.SPIN_AKA_ACCESS_TOKEN }}
         run: |
           spin plugin install aka --yes
           spin aka login --token "${SPIN_AKA_ACCESS_TOKEN}"

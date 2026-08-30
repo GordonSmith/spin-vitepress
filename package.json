@@ -1,6 +1,6 @@
 {
     "name": "spin-vitepress",
-    "version": "0.3.5",
+    "version": "0.4.0",
     "private": true,
     "scripts": {
         "clean": "rimraf test-c/build test-rust/target test-ts/build test-ts/dist",

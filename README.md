@@ -7,6 +7,7 @@ A VitePress documentation site built with Spin WebAssembly components, demonstra
 | Deployment | Link |
 |-----------|------|
 | **Fermyon Cloud** | [https://vitepress-wa2dyke7.fermyon.app](https://vitepress-wa2dyke7.fermyon.app) |
+| **Akamai Functions** | [https://94760937-2a22-48f9-ad58-6161e1cc7f86.fwf.app](https://94760937-2a22-48f9-ad58-6161e1cc7f86.fwf.app) |
 
 ## Developers
 

@@ -112,33 +112,8 @@ jobs:
         run: |
           set -o pipefail
           mkdir -p ci-logs
-          spin --version | tee ci-logs/spin-version.log
           spin plugin install aka --yes 2>&1 | tee ci-logs/aka-plugin-install.log
-          spin plugins list 2>&1 | tee ci-logs/spin-plugins.log
-          spin aka auth login --token "${SPIN_AKA_ACCESS_TOKEN}"
-          spin aka info 2>&1 | tee ci-logs/aka-info.log
-
-          apps_json="$(spin aka app list --account-name "${SPIN_AKA_ACCOUNT_NAME}" --format json 2> >(tee ci-logs/aka-app-list.stderr.log >&2))"
-          printf '%s\n' "${apps_json}" | tee ci-logs/aka-app-list.json
-          app_id="$(printf '%s' "${apps_json}" | node -e '
-            let input = "";
-            process.stdin.on("data", chunk => input += chunk);
-            process.stdin.on("end", () => {
-              const apps = JSON.parse(input || "[]");
-              const app = apps.find(candidate => candidate.name === process.env.SPIN_AKA_APP_NAME);
-              console.log(app?.id ?? app?.app_id ?? app?.appId ?? "");
-            });
-          ')"
-
-          if [[ -n "${app_id}" ]]; then
-            echo "Deploying to existing Akamai Functions app ${SPIN_AKA_APP_NAME} (${app_id})"
-            spin aka deploy --account-name "${SPIN_AKA_ACCOUNT_NAME}" --app-id "${app_id}" --no-confirm --skip-readiness-check 2>&1 | tee ci-logs/aka-deploy.log
-          else
-            echo "Creating Akamai Functions app ${SPIN_AKA_APP_NAME}"
-            spin aka deploy --account-name "${SPIN_AKA_ACCOUNT_NAME}" --create-name "${SPIN_AKA_APP_NAME}" --no-confirm --skip-readiness-check 2>&1 | tee ci-logs/aka-deploy.log
-          fi
-
-          rm -f .spin-aka/config.toml
+          spin aka deploy --no-confirm 2>&1 | tee ci-logs/aka-deploy.log
 
       - name: Check deployment outcomes
         if: ${{ always() && steps.deploy-cloud.outcome == 'failure' }}

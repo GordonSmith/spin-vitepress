@@ -4,7 +4,7 @@ spin_manifest_version = 2
 authors = ["Gordon Smith <GordonJSmith@gmail.com>"]
 description = ""
 name = "vitepress"
-version = "0.4.3"
+version = "0.4.4"
 
 [variables]
 oauth_client_id = { default = "" }

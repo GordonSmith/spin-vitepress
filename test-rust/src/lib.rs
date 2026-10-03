@@ -1,11 +1,9 @@
-use spin_sdk::http::{send, EmptyBody, IntoResponse, Request, Response};
-use spin_sdk::http_service;
+use spin_sdk::http::{send, IntoResponse, Request, Response};
+use spin_sdk::http_component;
 
-#[http_service]
+#[http_component]
 async fn handle_hello_world(_req: Request) -> anyhow::Result<impl IntoResponse> {
-    let outgoing = Request::get("https://random-data-api.fermyon.app/animals/json")
-        .body(EmptyBody::new())
-        .unwrap();
+    let outgoing = Request::get("https://random-data-api.fermyon.app/animals/json").build();
 
     let resp: Response = send(outgoing).await?;
 

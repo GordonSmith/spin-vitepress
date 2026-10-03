@@ -30,5 +30,9 @@ features:
     details: Simple C++ http server
     link: /c
     target: _top
+  - title: GitHub Login 🔐
+    details: OAuth 2.0 sign-in implemented in Rust
+    link: /auth
+    target: _top
 ---
 

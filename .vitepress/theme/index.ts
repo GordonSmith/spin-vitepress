@@ -1,19 +1,21 @@
 // https://vitepress.dev/guide/custom-theme
-// import { h } from "vue";
+import { h } from "vue";
 import type { Theme } from "vitepress";
 import DefaultTheme from "vitepress/theme";
 // import RenderComponent from "@hpcc-js/markdown-it-plugins/vitepress/RenderComponent.vue";
 // import "@hpcc-js/markdown-it-plugins/vitepress/styles.ts";
 
+import AuthStatus from "./components/AuthStatus.vue";
 import "./index.css";
 
 export default {
     extends: DefaultTheme,
-    // Layout: () => {
-    //     return h(DefaultTheme.Layout, null, {
-    //         // https://vitepress.dev/guide/extending-default-theme#layout-slots
-    //     });
-    // },
+    Layout: () => {
+        return h(DefaultTheme.Layout, null, {
+            // https://vitepress.dev/guide/extending-default-theme#layout-slots
+            "nav-bar-content-after": () => h(AuthStatus),
+        });
+    },
     // enhanceApp({ app }) {
     //     app.component("RenderComponent", RenderComponent);
     // },

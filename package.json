@@ -3,7 +3,7 @@
     "version": "0.4.3",
     "private": true,
     "scripts": {
-        "clean": "rimraf test-c/build test-rust/target test-ts/build test-ts/dist",
+        "clean": "rimraf test-c/build test-rust/target test-oauth/target test-ts/build test-ts/dist",
         "clean-vcpkg": "rimraf vcpkg/vcpkg vcpkg_installed",
         "clean-all": "run-p clean clean-vcpkg",
         "sync-version": "node scripts/version.mjs sync",
@@ -21,10 +21,14 @@
         "build-spin": "spin build",
         "serve-spin": "spin up",
         "build": "run-s build-spin",
+        "predeploy-cloud": "npm run sync-version",
+        "deploy-cloud": "node scripts/deploy.mjs cloud",
+        "predeploy-aka": "npm run sync-version",
+        "deploy-aka": "node scripts/deploy.mjs aka",
         "serve": "run-p serve-docs serve-spin",
         "update": "npx -y npm-check-updates -u -t minor && cd test-ts && npx -y npm-check-updates -u -t minor",
         "update-major": "npx -y npm-check-updates -u && cd test-ts && npx -y npm-check-updates -u",
-        "update-rust": "cd test-rust && cargo update",
+        "update-rust": "cd test-rust && cargo update && cd ../test-oauth && cargo update",
         "update-ts": "cd test-ts && npm run update-major && npm install && npm update"
     },
     "devDependencies": {

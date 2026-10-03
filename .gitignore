@@ -5,3 +5,4 @@ node_modules/
 test-c/wit-full
 vcpkg/
 vcpkg_installed/
+.env

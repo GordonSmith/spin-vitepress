@@ -21,6 +21,11 @@ env:
   SPIN_AKA_ACCESS_TOKEN: ${{ secrets.SPIN_AKA_ACCESS_TOKEN }}
   SPIN_AKA_ACCOUNT_NAME: "gordonsmith"
   SPIN_AKA_APP_NAME: "vitepress"
+  # GitHub OAuth App credentials (one app per deployment, as each has its own callback URL)
+  OAUTH_CLOUD_CLIENT_ID: ${{ secrets.OAUTH_CLOUD_CLIENT_ID }}
+  OAUTH_CLOUD_CLIENT_SECRET: ${{ secrets.OAUTH_CLOUD_CLIENT_SECRET }}
+  OAUTH_AKA_CLIENT_ID: ${{ secrets.OAUTH_AKA_CLIENT_ID }}
+  OAUTH_AKA_CLIENT_SECRET: ${{ secrets.OAUTH_AKA_CLIENT_SECRET }}
 
 jobs:
 
@@ -59,6 +64,7 @@ jobs:
         with:
           workspaces: |
             test-rust -> target
+            test-oauth -> target
 
       - name: Install rust dependencies
         run: |
@@ -112,7 +118,11 @@ jobs:
           spin plugin install cloud --version ${{ env.CLOUD_PLUGIN_VERSION }} --yes 2>&1 | tee ci-logs/cloud-plugin-install.log
           spin plugins list 2>&1 | tee ci-logs/spin-plugins.log
           spin cloud login --token "${FERMYON_CLOUD_TOKEN}"
-          spin cloud deploy -f spin.toml 2>&1 | tee ci-logs/cloud-deploy.log
+          oauth_vars=()
+          if [ -n "${OAUTH_CLOUD_CLIENT_ID}" ] && [ -n "${OAUTH_CLOUD_CLIENT_SECRET}" ]; then
+            oauth_vars=(--variable "oauth_client_id=${OAUTH_CLOUD_CLIENT_ID}" --variable "oauth_client_secret=${OAUTH_CLOUD_CLIENT_SECRET}")
+          fi
+          spin cloud deploy -f spin.toml "${oauth_vars[@]}" 2>&1 | tee ci-logs/cloud-deploy.log
 
       - name: Deploy to Fermyon Wasm Functions
         if: ${{ env.SPIN_AKA_ACCESS_TOKEN != '' }}
@@ -121,7 +131,11 @@ jobs:
         run: |
           spin plugin install aka --version ${{ env.AKA_PLUGIN_VERSION }} --yes
           spin aka login --token "${SPIN_AKA_ACCESS_TOKEN}"
-          spin aka deploy --no-confirm
+          oauth_vars=()
+          if [ -n "${OAUTH_AKA_CLIENT_ID}" ] && [ -n "${OAUTH_AKA_CLIENT_SECRET}" ]; then
+            oauth_vars=(--variable "oauth_client_id=${OAUTH_AKA_CLIENT_ID}" --variable "oauth_client_secret=${OAUTH_AKA_CLIENT_SECRET}")
+          fi
+          spin aka deploy --no-confirm "${oauth_vars[@]}"
 
       - name: Check deployment outcomes
         if: ${{ always() && steps.deploy-cloud.outcome == 'failure' }}

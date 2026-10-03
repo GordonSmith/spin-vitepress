@@ -53,19 +53,61 @@ A VitePress documentation site built with Spin WebAssembly components, demonstra
    spin up
    ```
 
+### OAuth (GitHub login)
+
+The `test-oauth` Rust component (mounted at `/auth`) implements the GitHub OAuth 2.0
+authorization-code flow:
+
+| Route | Description |
+|-------|-------------|
+| `/auth` | Shows the signed-in user, or a sign-in page when signed out |
+| `/auth/login` | Starts the OAuth flow (redirects to GitHub); optional `?return_to=/path` to come back to afterwards |
+| `/auth/callback` | OAuth redirect target (validates `state`, exchanges the code) |
+| `/auth/user` | JSON for the signed-in user (`401` when signed out) |
+| `/auth/logout` | Clears the session and returns to the sign-in page (or `?return_to=/path`) |
+
+The site's top nav (next to the GitHub link) shows the sign-in status via `/auth/user`: a
+**Sign in** button when signed out, or the user's avatar with an account menu when signed in.
+It is hidden when the OAuth component is unavailable (e.g. `vitepress dev` or not configured).
+
+The session is an HMAC-signed, `HttpOnly` cookie; the GitHub access token is not stored.
+
+1. Create a [GitHub OAuth App](https://github.com/settings/developers) with the
+   callback URL `<your-origin>/auth/callback` (e.g. `http://127.0.0.1:3000/auth/callback`).
+2. Supply its credentials as Spin variables:
+   ```bash
+   SPIN_VARIABLE_OAUTH_CLIENT_ID=... SPIN_VARIABLE_OAUTH_CLIENT_SECRET=... spin up
+   ```
+   or put them in a git-ignored `.env` file in the repo root, which `spin up` loads automatically:
+   ```bash
+   SPIN_VARIABLE_OAUTH_CLIENT_ID=...
+   SPIN_VARIABLE_OAUTH_CLIENT_SECRET=...
+   ```
+
+Optional variables: `oauth_scope` (default `read:user`) and `oauth_redirect_uri` (overrides the
+callback URL derived from the request, useful behind proxies).
+
+For CI deployments, set the repository secrets `OAUTH_CLOUD_CLIENT_ID` / `OAUTH_CLOUD_CLIENT_SECRET`
+(Fermyon Cloud) and `OAUTH_AKA_CLIENT_ID` / `OAUTH_AKA_CLIENT_SECRET` (Fermyon Wasm Functions).
+Without credentials, `/auth` returns a "not configured" page.
+
 ### Deployment
 
 #### Deploy to Fermyon Cloud
 
 ```bash
-spin cloud deploy
+npm run deploy-cloud
 ```
 
 #### Deploy to Fermyon Wasm Functions
 
 ```bash
-spin aka deploy
+npm run deploy-aka
 ```
 
 Requires an access token from Fermyon Wasm Functions.
+
+Both scripts load the `.env` file (or the file named by `SPIN_ENV_FILE`) and pass every
+`SPIN_VARIABLE_*` entry to the deploy as `--variable`. Extra arguments are forwarded, e.g.
+`npm run deploy-aka -- --no-confirm`.
 

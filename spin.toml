@@ -6,6 +6,12 @@ description = ""
 name = "vitepress"
 version = "0.4.3"
 
+[variables]
+oauth_client_id = { default = "" }
+oauth_client_secret = { default = "", secret = true }
+oauth_scope = { default = "read:user" }
+oauth_redirect_uri = { default = "" }
+
 [[trigger.http]]
 route = "/..."
 component = "vitepress"
@@ -57,17 +63,21 @@ command = ["npm install", "npm run build"]
 watch = ["src/**/*.ts"]
 workdir = "test-ts"
 
-# [[trigger.http]]
-# route = "/login"
-# component = "frontend"
-# executor = { type = "wasip3-unstable" }
+[[trigger.http]]
+route = "/auth/..."
+component = "test-oauth"
 
-# [component.frontend]
-# source = "p3/authed_app.wasm"  # for P3 we have to post-process compose in build.sh
-# allowed_outbound_hosts = ["https://github.com", "https://api.github.com"]
+[component.test-oauth]
+source = "test-oauth/target/wasm32-wasip1/release/test_oauth.wasm"
+allowed_outbound_hosts = ["https://github.com", "https://api.github.com"]
 
-# [component.frontend.build]
-# command = "./build.sh"
-# Unused because for now we have to precompose in build.sh
-# [component.frontend.dependencies]
-# "wasi:http/incoming-handler@0.2.0" = { path = "target/wasm32-wasip1/release/example.wasm" }
+[component.test-oauth.variables]
+client_id = "{{ oauth_client_id }}"
+client_secret = "{{ oauth_client_secret }}"
+scope = "{{ oauth_scope }}"
+redirect_uri = "{{ oauth_redirect_uri }}"
+
+[component.test-oauth.build]
+command = "cargo build --target wasm32-wasip1 --release"
+watch = ["src/**/*.rs", "Cargo.toml"]
+workdir = "test-oauth"

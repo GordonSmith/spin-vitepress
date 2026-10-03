@@ -1,18 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRoute } from "vitepress";
-
-interface User {
-    login: string;
-    name: string | null;
-    avatar_url: string | null;
-    html_url: string | null;
-}
-
-// "unavailable" covers the docs dev server and deployments without OAuth configured.
-type Status = "loading" | "signed-in" | "signed-out" | "unavailable";
-
-const LOGIN_BASE = "/auth";
+import { fetchUser, LOGIN_BASE, type Status, type User } from "../auth";
 
 const route = useRoute();
 const status = ref<Status>("loading");
@@ -26,26 +15,9 @@ const signInHref = computed(() => `${LOGIN_BASE}/login?return_to=${encodeURIComp
 const signOutHref = computed(() => `${LOGIN_BASE}/logout?return_to=${encodeURIComponent(returnTo.value)}`);
 
 async function refresh() {
-    try {
-        const res = await fetch(`${LOGIN_BASE}/user`, {
-            credentials: "same-origin",
-            headers: { accept: "application/json" },
-            cache: "no-store",
-        });
-        if (res.ok && res.headers.get("content-type")?.includes("application/json")) {
-            user.value = await res.json();
-            status.value = "signed-in";
-        } else if (res.status === 401) {
-            user.value = null;
-            status.value = "signed-out";
-        } else {
-            user.value = null;
-            status.value = "unavailable";
-        }
-    } catch {
-        user.value = null;
-        status.value = "unavailable";
-    }
+    const result = await fetchUser();
+    status.value = result.status;
+    user.value = result.user;
 }
 
 function updateReturnTo() {
@@ -126,7 +98,7 @@ onBeforeUnmount(() => {
                 <div class="auth-menu-divider" />
                 <a v-if="user.html_url" class="auth-menu-item" role="menuitem" :href="user.html_url" target="_blank"
                     rel="noreferrer">Your GitHub profile</a>
-                <a class="auth-menu-item" role="menuitem" :href="LOGIN_BASE" target="_self">Account</a>
+                <a class="auth-menu-item" role="menuitem" href="/account.html">Account</a>
                 <div class="auth-menu-divider" />
                 <a class="auth-menu-item" role="menuitem" :href="signOutHref" target="_self">Sign out</a>
             </div>

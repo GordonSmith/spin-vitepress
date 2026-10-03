@@ -58,6 +58,8 @@ struct Session {
     avatar_url: Option<String>,
     html_url: Option<String>,
     exp: u64,
+    // Full GitHub `/user` response; may push the cookie towards the ~4KB browser limit.
+    more: serde_json::Value,
 }
 
 #[derive(Deserialize)]
@@ -260,6 +262,8 @@ fn authorize(req: &Request, ctx: &Ctx, config: &Config) -> Result<Reply> {
         .append_pair("scope", &config.scope)
         .append_pair("state", &state)
         .append_pair("allow_signup", "true")
+        // Otherwise GitHub silently reuses the browser's signed-in account.
+        .append_pair("prompt", "select_account")
         .finish();
     let return_cookie = match return_to(req) {
         Some(path) => ctx.cookie(RETURN_COOKIE, &B64.encode(path), STATE_TTL_SECS),
@@ -315,7 +319,13 @@ async fn callback(req: &Request, ctx: &Ctx, config: &Config) -> Result<Reply> {
     }
 
     let token = exchange_code(code, ctx, config).await?;
-    let user = fetch_user(&token).await?;
+    let mut more = fetch_user(&token).await?;
+    let user: GitHubUser = serde_json::from_value(more.clone()).context("invalid user response")?;
+    if let Some(fields) = more.as_object_mut() {
+        for key in ["login", "name", "avatar_url", "html_url"] {
+            fields.remove(key);
+        }
+    }
 
     let session = Session {
         login: user.login,
@@ -323,6 +333,7 @@ async fn callback(req: &Request, ctx: &Ctx, config: &Config) -> Result<Reply> {
         avatar_url: user.avatar_url,
         html_url: user.html_url,
         exp: now() + SESSION_TTL_SECS,
+        more,
     };
     let value = sign(&serde_json::to_vec(&session)?, config)?;
     let location = cookie(req, RETURN_COOKIE)
@@ -345,6 +356,7 @@ fn user(req: &Request, config: &Config) -> Reply {
         "name": session.name,
         "avatar_url": session.avatar_url,
         "html_url": session.html_url,
+        "more": session.more,
     });
     Reply::new(200, "application/json", body.to_string())
 }
@@ -374,7 +386,7 @@ async fn exchange_code(code: &str, ctx: &Ctx, config: &Config) -> Result<String>
     }
 }
 
-async fn fetch_user(token: &str) -> Result<GitHubUser> {
+async fn fetch_user(token: &str) -> Result<serde_json::Value> {
     let request = Request::get(USER_URL)
         .header("accept", "application/vnd.github+json")
         .header("authorization", format!("Bearer {token}"))

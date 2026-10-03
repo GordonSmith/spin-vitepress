@@ -9,9 +9,14 @@ permissions:
   contents: write
 
 env:
-  NODE_VERSION: "24"
+  NODE_VERSION: "22.23.2"
+  RUST_VERSION: "1.97.0"
   RUST_TARGET: "wasm32-wasip2"
-  SPIN_VERSION: "4.1.0"
+  WIT_BINDGEN_VERSION: "0.62.0"
+  SPIN_VERSION: "4.2.1"
+  JS2WASM_VERSION: "0.6.1"
+  CLOUD_PLUGIN_VERSION: "0.11.0"
+  AKA_PLUGIN_VERSION: "0.7.6"
   FERMYON_CLOUD_TOKEN: ${{ secrets.FERMYON_CLOUD }}
   SPIN_AKA_ACCESS_TOKEN: ${{ secrets.SPIN_AKA_ACCESS_TOKEN }}
   SPIN_AKA_ACCOUNT_NAME: "gordonsmith"
@@ -34,8 +39,11 @@ jobs:
         uses: fermyon/actions/spin/setup@v1.0.12
         with:
           version: "v${{ env.SPIN_VERSION }}"
-          plugins: |
-            js2wasm
+
+      - name: Install Spin plugins
+        run: |
+          spin plugins update
+          spin plugins install js2wasm --version ${{ env.JS2WASM_VERSION }} --yes
 
       - name: Install Node.js
         uses: actions/setup-node@v7.0.0
@@ -54,8 +62,9 @@ jobs:
 
       - name: Install rust dependencies
         run: |
-          rustup target add ${{ env.RUST_TARGET }}
-          command -v wit-bindgen >/dev/null 2>&1 || cargo install wit-bindgen-cli
+          rustup toolchain install ${{ env.RUST_VERSION }} --profile minimal --target ${{ env.RUST_TARGET }}
+          rustup default ${{ env.RUST_VERSION }}
+          cargo install wit-bindgen-cli --version ${{ env.WIT_BINDGEN_VERSION }} --locked
 
       - name: Restore vcpkg cache
         uses: actions/cache@v6.1.0
@@ -100,7 +109,7 @@ jobs:
           set -o pipefail
           mkdir -p ci-logs
           spin --version | tee ci-logs/spin-version.log
-          spin plugin install cloud --yes 2>&1 | tee ci-logs/cloud-plugin-install.log
+          spin plugin install cloud --version ${{ env.CLOUD_PLUGIN_VERSION }} --yes 2>&1 | tee ci-logs/cloud-plugin-install.log
           spin plugins list 2>&1 | tee ci-logs/spin-plugins.log
           spin cloud login --token "${FERMYON_CLOUD_TOKEN}"
           spin cloud deploy -f spin.toml 2>&1 | tee ci-logs/cloud-deploy.log
@@ -110,7 +119,7 @@ jobs:
         id: deploy-aka
         continue-on-error: true
         run: |
-          spin plugin install aka --yes
+          spin plugin install aka --version ${{ env.AKA_PLUGIN_VERSION }} --yes
           spin aka login --token "${SPIN_AKA_ACCESS_TOKEN}"
           spin aka deploy --no-confirm
 

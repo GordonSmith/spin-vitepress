@@ -110,6 +110,15 @@ impl Ctx {
 
     fn cookie(&self, name: &str, value: &str, max_age: u64) -> String {
         let path = if self.base_path.is_empty() { "/" } else { &self.base_path };
+        self.cookie_at(path, name, value, max_age)
+    }
+
+    /// The session cookie is site-wide so other components can forward it to `/user`.
+    fn session_cookie(&self, value: &str, max_age: u64) -> String {
+        self.cookie_at("/", SESSION_COOKIE, value, max_age)
+    }
+
+    fn cookie_at(&self, path: &str, name: &str, value: &str, max_age: u64) -> String {
         let secure = if self.secure { "; Secure" } else { "" };
         // Pair Max-Age with Expires so deletions are honoured by old/strict clients.
         let expires = if max_age == 0 {
@@ -297,6 +306,8 @@ fn is_local_path(path: &str) -> bool {
 fn logout(req: &Request, ctx: &Ctx) -> Reply {
     let location = return_to(req).unwrap_or_else(|| ctx.url("/?signed_out=1"));
     redirect(&location)
+        .with_cookie(ctx.session_cookie("", 0))
+        // Clear any session cookie left over from when it was scoped to the mount point.
         .with_cookie(ctx.cookie(SESSION_COOKIE, "", 0))
         .with_cookie(ctx.cookie(STATE_COOKIE, "", 0))
         .with_cookie(ctx.cookie(RETURN_COOKIE, "", 0))
@@ -344,7 +355,8 @@ async fn callback(req: &Request, ctx: &Ctx, config: &Config) -> Result<Reply> {
     Ok(redirect(&location)
         .with_cookie(ctx.cookie(STATE_COOKIE, "", 0))
         .with_cookie(ctx.cookie(RETURN_COOKIE, "", 0))
-        .with_cookie(ctx.cookie(SESSION_COOKIE, &value, SESSION_TTL_SECS)))
+        .with_cookie(ctx.cookie(SESSION_COOKIE, "", 0))
+        .with_cookie(ctx.session_cookie(&value, SESSION_TTL_SECS)))
 }
 
 fn user(req: &Request, config: &Config) -> Reply {

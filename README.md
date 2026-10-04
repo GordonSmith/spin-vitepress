@@ -65,6 +65,7 @@ authorization-code flow:
 | `/auth/callback` | OAuth redirect target (validates `state`, exchanges the code) |
 | `/auth/user` | JSON for the signed-in user (`401` when signed out) |
 | `/auth/logout` | Clears the session and returns to the sign-in page (or `?return_to=/path`) |
+| `/auth/admin` | Lists everyone who has signed in (only for logins in `oauth_admins`) |
 
 The site's top nav (next to the GitHub link) shows the sign-in status via `/auth/user`: a
 **Sign in** button when signed out, or the user's avatar with an account menu when signed in.
@@ -84,8 +85,9 @@ The session is an HMAC-signed, `HttpOnly` cookie; the GitHub access token is not
    SPIN_VARIABLE_OAUTH_CLIENT_SECRET=...
    ```
 
-Optional variables: `oauth_scope` (default `read:user`) and `oauth_redirect_uri` (overrides the
-callback URL derived from the request, useful behind proxies).
+Optional variables: `oauth_scope` (default `read:user`), `oauth_redirect_uri` (overrides the
+callback URL derived from the request, useful behind proxies) and `oauth_admins` (comma-separated
+GitHub logins allowed to view `/auth/admin`). Sign-ins are recorded in the default key-value store.
 
 For CI deployments, set the repository secrets `OAUTH_CLOUD_CLIENT_ID` / `OAUTH_CLOUD_CLIENT_SECRET`
 (Fermyon Cloud) and `OAUTH_AKA_CLIENT_ID` / `OAUTH_AKA_CLIENT_SECRET` (Fermyon Wasm Functions).

@@ -181,11 +181,11 @@ void exports_wasi_http_incoming_handler_handle(
 
     hdrs = wasi_http_types_method_incoming_request_headers(b_req);
     b_hdrs = wasi_http_types_borrow_fields(hdrs);
-    if (!is_logged_in(b_hdrs))
-    {
-        send_unauthorized(response_out);
-        return;
-    }
+    // if (!is_logged_in(b_hdrs))
+    // {
+    //     send_unauthorized(response_out);
+    //     return;
+    // }
 
     out = open_memstream(&out_ptr, &size);
 

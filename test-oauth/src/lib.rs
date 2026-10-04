@@ -8,6 +8,8 @@
 //! - `/user`      – JSON for the signed-in user (401 when signed out)
 //! - `/logout`    – clears the session cookie and returns to the sign-in page
 //!                  (or to `?return_to=/path` when given)
+//! - `/admin`     – lists everyone who has signed in (logins listed in the
+//!                  `admins` variable only)
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -19,6 +21,7 @@ use serde::{Deserialize, Serialize};
 use sha2::Sha256;
 use spin_sdk::http::conversions::TryFromIncomingRequest;
 use spin_sdk::http::{send, Fields, IncomingRequest, OutgoingResponse, Request, Response, ResponseOutparam};
+use spin_sdk::key_value::Store;
 use spin_sdk::{http_component, variables};
 
 const AUTHORIZE_URL: &str = "https://github.com/login/oauth/authorize";
@@ -30,13 +33,16 @@ const STATE_COOKIE: &str = "oauth_state";
 const RETURN_COOKIE: &str = "oauth_return";
 const SESSION_COOKIE: &str = "oauth_session";
 const STATE_TTL_SECS: u64 = 600;
-const SESSION_TTL_SECS: u64 = 60 * 60 * 8;
+// Browsers cap cookie lifetime at 400 days; activity renews it (see `renewed_session_cookie`).
+const SESSION_TTL_SECS: u64 = 60 * 60 * 24 * 400;
+const USER_KEY_PREFIX: &str = "user:";
 
 struct Config {
     client_id: String,
     client_secret: String,
     scope: String,
     redirect_uri: Option<String>,
+    admins: Vec<String>,
 }
 
 impl Config {
@@ -47,8 +53,30 @@ impl Config {
             client_secret: get("client_secret")?,
             scope: get("scope").unwrap_or_else(|| "read:user".into()),
             redirect_uri: get("redirect_uri"),
+            admins: get("admins")
+                .unwrap_or_default()
+                .split(',')
+                .map(|s| s.trim().to_ascii_lowercase())
+                .filter(|s| !s.is_empty())
+                .collect(),
         })
     }
+
+    fn is_admin(&self, login: &str) -> bool {
+        self.admins.iter().any(|a| a.eq_ignore_ascii_case(login))
+    }
+}
+
+/// A user who has signed in at least once, kept in the key-value store.
+#[derive(Serialize, Deserialize)]
+struct KnownUser {
+    login: String,
+    name: Option<String>,
+    avatar_url: Option<String>,
+    html_url: Option<String>,
+    first_seen: u64,
+    last_seen: u64,
+    sign_ins: u64,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -206,8 +234,9 @@ async fn route(req: &Request) -> Reply {
         "" => Ok(index(req, &ctx, &config)),
         "/login" => authorize(req, &ctx, &config),
         "/callback" => callback(req, &ctx, &config).await,
-        "/user" => Ok(user(req, &config)),
+        "/user" => Ok(user(req, &ctx, &config)),
         "/logout" => Ok(logout(req, &ctx)),
+        "/admin" => admin(req, &ctx, &config),
         _ => Ok(Reply::new(404, "text/plain", "Not found")),
     };
 
@@ -227,7 +256,8 @@ async fn route(req: &Request) -> Reply {
 }
 
 fn index(req: &Request, ctx: &Ctx, config: &Config) -> Reply {
-    if let Some(session) = current_session(req, config) {
+    if let Some(mut session) = current_session(req, config) {
+        let renewed = renewed_session_cookie(&mut session, ctx, config);
         let name = session.name.as_deref().unwrap_or(&session.login);
         let avatar = session
             .avatar_url
@@ -242,7 +272,7 @@ fn index(req: &Request, ctx: &Ctx, config: &Config) -> Reply {
             escape(&session.login),
             escape(&ctx.url("/logout")),
         );
-        return html(200, body);
+        return with_optional_cookie(html(200, body), renewed);
     }
 
     let signed_out = form_urlencoded::parse(req.query().as_bytes())
@@ -338,6 +368,11 @@ async fn callback(req: &Request, ctx: &Ctx, config: &Config) -> Result<Reply> {
         }
     }
 
+    // Recording is best-effort: a store outage must not block sign-in.
+    if let Err(e) = record_sign_in(&user) {
+        eprintln!("oauth: failed to record sign-in for {}: {e:#}", user.login);
+    }
+
     let session = Session {
         login: user.login,
         name: user.name,
@@ -359,10 +394,11 @@ async fn callback(req: &Request, ctx: &Ctx, config: &Config) -> Result<Reply> {
         .with_cookie(ctx.session_cookie(&value, SESSION_TTL_SECS)))
 }
 
-fn user(req: &Request, config: &Config) -> Reply {
-    let Some(session) = current_session(req, config) else {
+fn user(req: &Request, ctx: &Ctx, config: &Config) -> Reply {
+    let Some(mut session) = current_session(req, config) else {
         return Reply::new(401, "application/json", r#"{"error":"unauthenticated"}"#);
     };
+    let renewed = renewed_session_cookie(&mut session, ctx, config);
     let body = serde_json::json!({
         "login": session.login,
         "name": session.name,
@@ -370,7 +406,120 @@ fn user(req: &Request, config: &Config) -> Reply {
         "html_url": session.html_url,
         "more": session.more,
     });
-    Reply::new(200, "application/json", body.to_string())
+    with_optional_cookie(Reply::new(200, "application/json", body.to_string()), renewed)
+}
+
+/// Sliding expiry: re-signs the session with a fresh `exp` so active users never time out.
+fn renewed_session_cookie(session: &mut Session, ctx: &Ctx, config: &Config) -> Option<String> {
+    session.exp = now() + SESSION_TTL_SECS;
+    let payload = serde_json::to_vec(session).ok()?;
+    let value = sign(&payload, config).ok()?;
+    Some(ctx.session_cookie(&value, SESSION_TTL_SECS))
+}
+
+fn record_sign_in(user: &GitHubUser) -> Result<()> {
+    let store = Store::open_default()?;
+    let key = format!("{USER_KEY_PREFIX}{}", user.login.to_ascii_lowercase());
+    let previous: Option<KnownUser> = store.get_json(&key)?;
+    let now = now();
+    let record = KnownUser {
+        login: user.login.clone(),
+        name: user.name.clone(),
+        avatar_url: user.avatar_url.clone(),
+        html_url: user.html_url.clone(),
+        first_seen: previous.as_ref().map_or(now, |p| p.first_seen),
+        last_seen: now,
+        sign_ins: previous.map_or(0, |p| p.sign_ins) + 1,
+    };
+    store.set_json(&key, &record)
+}
+
+fn known_users() -> Result<Vec<KnownUser>> {
+    let store = Store::open_default()?;
+    let mut users = Vec::new();
+    for key in store.get_keys()? {
+        if key.starts_with(USER_KEY_PREFIX) {
+            if let Some(user) = store.get_json::<KnownUser>(&key)? {
+                users.push(user);
+            }
+        }
+    }
+    users.sort_by(|a, b| b.last_seen.cmp(&a.last_seen));
+    Ok(users)
+}
+
+fn admin(req: &Request, ctx: &Ctx, config: &Config) -> Result<Reply> {
+    let Some(session) = current_session(req, config) else {
+        let query = form_urlencoded::Serializer::new(String::new())
+            .append_pair("return_to", &format!("{}/admin", ctx.base_path))
+            .finish();
+        return Ok(redirect(&ctx.url(&format!("/login?{query}"))));
+    };
+    if !config.is_admin(&session.login) {
+        return Ok(html(
+            403,
+            format!(
+                "<h1>Forbidden</h1><p>@{} is not an administrator.</p><p><a href=\"/\">Home</a></p>",
+                escape(&session.login)
+            ),
+        ));
+    }
+
+    let users = known_users()?;
+    let rows: String = users
+        .iter()
+        .map(|u| {
+            let avatar = u
+                .avatar_url
+                .as_deref()
+                .map(|url| format!("<img src=\"{}\" width=\"32\" height=\"32\" alt=\"\">", escape(url)))
+                .unwrap_or_default();
+            format!(
+                "<tr><td>{avatar}</td><td><a href=\"{}\">@{}</a></td><td>{}</td>\
+                 <td>{}</td><td>{}</td><td>{}</td></tr>",
+                escape(u.html_url.as_deref().unwrap_or("#")),
+                escape(&u.login),
+                escape(u.name.as_deref().unwrap_or("")),
+                format_time(u.first_seen),
+                format_time(u.last_seen),
+                u.sign_ins,
+            )
+        })
+        .collect();
+    Ok(html(
+        200,
+        format!(
+            "<h1>Users</h1><p>{} people have signed in.</p>\
+             <table><thead><tr><th></th><th>Login</th><th>Name</th><th>First seen</th>\
+             <th>Last sign-in</th><th>Sign-ins</th></tr></thead><tbody>{rows}</tbody></table>\
+             <p><a href=\"/\">Home</a> · <a href=\"{}\">Account</a></p>",
+            users.len(),
+            escape(&ctx.url("/")),
+        ),
+    ))
+}
+
+/// Unix seconds as `YYYY-MM-DD HH:MM UTC` (civil-from-days, Howard Hinnant).
+fn format_time(secs: u64) -> String {
+    let days = (secs / 86_400) as i64;
+    let rem = secs % 86_400;
+    let z = days + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = z - era * 146_097;
+    let yoe = (doe - doe / 1_460 + doe / 36_524 - doe / 146_096) / 365;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let day = doy - (153 * mp + 2) / 5 + 1;
+    let month = if mp < 10 { mp + 3 } else { mp - 9 };
+    let year = yoe + era * 400 + i64::from(month <= 2);
+    format!("{year:04}-{month:02}-{day:02} {:02}:{:02} UTC", rem / 3_600, rem % 3_600 / 60)
+}
+
+fn with_optional_cookie(reply: Reply, cookie: Option<String>) -> Reply {
+    match cookie {
+        Some(c) => reply.with_cookie(c),
+        None => reply,
+    }
 }
 
 async fn exchange_code(code: &str, ctx: &Ctx, config: &Config) -> Result<String> {
@@ -483,7 +632,8 @@ fn html(status: u16, body: String) -> Reply {
     let page = format!(
         "<!doctype html><html><head><meta charset=\"utf-8\"><title>Login</title>\
          <style>body{{font-family:system-ui,sans-serif;max-width:40rem;margin:4rem auto;padding:0 1rem}}\
-         img{{border-radius:50%}}</style></head><body>{body}</body></html>"
+         img{{border-radius:50%}}table{{border-collapse:collapse;width:100%}}\
+         th,td{{text-align:left;padding:.25rem .5rem;border-bottom:1px solid #ddd;vertical-align:middle}}</style></head><body>{body}</body></html>"
     );
     Reply::new(status, "text/html; charset=utf-8", page)
 }
@@ -502,7 +652,14 @@ const NOT_CONFIGURED: &str = "<h1>OAuth not configured</h1>\
 
 #[cfg(test)]
 mod tests {
-    use super::{base_path, is_local_path};
+    use super::{base_path, format_time, is_local_path};
+
+    #[test]
+    fn formats_unix_time_as_utc() {
+        assert_eq!(format_time(0), "1970-01-01 00:00 UTC");
+        assert_eq!(format_time(951_782_400), "2000-02-29 00:00 UTC");
+        assert_eq!(format_time(1_791_115_200), "2026-10-04 12:00 UTC");
+    }
 
     #[test]
     fn return_to_must_be_a_local_path() {

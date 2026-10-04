@@ -11,6 +11,7 @@ oauth_client_id = { default = "" }
 oauth_client_secret = { default = "", secret = true }
 oauth_scope = { default = "read:user" }
 oauth_redirect_uri = { default = "" }
+oauth_admins = { default = "GordonSmith" }
 
 [[trigger.http]]
 route = "/..."
@@ -29,7 +30,7 @@ component = "test-c"
 
 [component.test-c]
 source = "test-c/build/http_root_world.wasm"
-allowed_outbound_hosts = ["http://test-oauth.spin.internal"]
+# allowed_outbound_hosts = ["http://test-oauth.spin.internal"]
 
 [component.test-c.build]
 command = "cmake -S . -B ./build -DCMAKE_TOOLCHAIN_FILE=../vcpkg_installed/x64-linux/wasi-sdk/share/cmake/wasi-sdk-p1.cmake -DCMAKE_BUILD_TYPE=MinSizeRel && cmake --build ./build"
@@ -70,12 +71,14 @@ component = "test-oauth"
 [component.test-oauth]
 source = "test-oauth/target/wasm32-wasip1/release/test_oauth.wasm"
 allowed_outbound_hosts = ["https://github.com", "https://api.github.com"]
+key_value_stores = ["default"]
 
 [component.test-oauth.variables]
 client_id = "{{ oauth_client_id }}"
 client_secret = "{{ oauth_client_secret }}"
 scope = "{{ oauth_scope }}"
 redirect_uri = "{{ oauth_redirect_uri }}"
+admins = "{{ oauth_admins }}"
 
 [component.test-oauth.build]
 command = "cargo build --target wasm32-wasip1 --release"

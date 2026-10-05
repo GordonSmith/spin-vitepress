@@ -1,6 +1,6 @@
 {
     "name": "spin-vitepress",
-    "version": "0.4.5",
+    "version": "0.5.0",
     "private": true,
     "scripts": {
         "install-wasi-sdk": "./scripts/cpp-install-wasi-sdk.sh",

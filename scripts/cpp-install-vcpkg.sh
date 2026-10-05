@@ -12,4 +12,4 @@ cd ./vcpkg
 git checkout $VCPKG_BUILD_TOOLS_VERSION
 ./bootstrap-vcpkg.sh
 cd ..
-./vcpkg/vcpkg install --triplet=wasm32-wasip1 --x-abi-tools-use-exact-versions --downloads-root=./build/vcpkg_downloads --x-buildtrees-root=./build/vcpkg_buildtrees --x-packages-root=./build/vcpkg_packages --x-install-root=./build/vcpkg_installed
+./vcpkg/vcpkg install --triplet=wasm32-wasip3 --x-abi-tools-use-exact-versions --downloads-root=./build/vcpkg_downloads --x-buildtrees-root=./build/vcpkg_buildtrees --x-packages-root=./build/vcpkg_packages --x-install-root=./build/vcpkg_installed

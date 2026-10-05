@@ -37,9 +37,24 @@ if(VCPKG_CMAKE_SYSTEM_NAME STREQUAL "WASI")
     vcpkg_replace_string("${SOURCE_PATH}/src/common/encryption_key_manager.cpp"
         "#elif defined(__MVS__)\n\t__mlockall(_BPX_SWAP);"
         "#elif defined(__wasi__)\n#elif defined(__MVS__)\n\t__mlockall(_BPX_SWAP);")
+    vcpkg_replace_string("${SOURCE_PATH}/src/storage/block_allocator.cpp"
+        "#elif defined(__MVS__)\n\t// the madvice functionality is not available on z/OS in any form\n\tsuccess = true;"
+        "#elif defined(__MVS__) || defined(__wasi__)\n\t// Memory advice is not available on these platforms.\n\tsuccess = true;")
     vcpkg_replace_string("${SOURCE_PATH}/src/parallel/task_scheduler.cpp"
         "#elif defined(_GNU_SOURCE)\n\tauto cpu = sched_getcpu();"
         "#elif defined(_GNU_SOURCE) && !defined(__wasi__)\n\tauto cpu = sched_getcpu();")
+    vcpkg_replace_string("${SOURCE_PATH}/third_party/httplib/httplib.hpp"
+        "#include <net/if.h>"
+        "#ifndef __wasi__\n#include <net/if.h>\n#endif")
+    vcpkg_replace_string("${SOURCE_PATH}/third_party/httplib/httplib.hpp"
+        "#include <sys/un.h>"
+        "#ifndef __wasi__\n#include <sys/un.h>\n#endif")
+    vcpkg_replace_string("${SOURCE_PATH}/third_party/httplib/httplib.hpp"
+        "#if !defined(_WIN32) || defined(CPPHTTPLIB_HAVE_AFUNIX_H)"
+        "#if (!defined(_WIN32) && !defined(__wasi__)) || defined(CPPHTTPLIB_HAVE_AFUNIX_H)")
+    vcpkg_replace_string("${SOURCE_PATH}/third_party/httplib/httplib.hpp"
+        "#if !defined _WIN32 && !defined ANDROID && !defined _AIX && !defined __MVS__"
+        "#if !defined _WIN32 && !defined ANDROID && !defined _AIX && !defined __MVS__ && !defined __wasi__")
     set(WASI_OPTIONS
         -DDISABLE_THREADS=ON
         -DDISABLE_EXTENSION_LOAD=ON
@@ -74,9 +89,9 @@ endif()
 if("httpfs" IN_LIST FEATURES)
     vcpkg_from_github(
         OUT_SOURCE_PATH DUCKDB_HTTPFS_SOURCE_PATH
-        REPO duckdb/duckdb_httpfs
-        REF 8ff2283fb14b443e673c58e2e9621e3c3215d794
-        SHA512 df2a61667b1fcf0e7a1d455a1805231c61362a135e7a93079b47032246b502b48aafcbae4aeee7b29145c25e3b98afa5ef6e3076ffcb71562acfbae6e2fbc087
+        REPO duckdb/duckdb-httpfs
+        REF 4bc690dba4496c765777a0269d48fdbaff7cdc11
+        SHA512 25263a97034cd28a4f6de9333e6c704c8c998851b7fe7b1558346faf9c958e69b9d8fbb41a007803d7230fc0a57fa714098d887a3e62b5726b6106d23b413263
         HEAD_REF main
         PATCHES
             library-linkage-httpfs.diff
@@ -150,6 +165,7 @@ vcpkg_cmake_configure(
             -DDUCKDB_EXPLICIT_PLATFORM=${DUCKDB_EXPLICIT_PLATFORM}
             -DDUCKDB_EXPLICIT_VERSION=v${VERSION}
             "-DBUILD_EXTENSIONS=${BUILD_EXTENSIONS}"
+            "-DSKIP_EXTENSIONS=core_functions"
             -DBUILD_SHELL=FALSE
             -DBUILD_UNITTESTS=OFF
             -DCMAKE_CXX_STANDARD=17
@@ -167,6 +183,11 @@ vcpkg_cmake_configure(
 )
 vcpkg_cmake_install()
 vcpkg_cmake_config_fixup()
+
+# Custom HTTPUtil implementations must derive from HTTPFSUtil: httpfs casts params to HTTPFSParams.
+if("httpfs" IN_LIST FEATURES)
+    file(INSTALL "${DUCKDB_HTTPFS_SOURCE_PATH}/src/include/httpfs_client.hpp" DESTINATION "${CURRENT_PACKAGES_DIR}/include/duckdb/httpfs")
+endif()
 
 if(VCPKG_LIBRARY_LINKAGE STREQUAL "static")
     foreach(path IN ITEMS duckdb.h duckdb/common/winapi.hpp)

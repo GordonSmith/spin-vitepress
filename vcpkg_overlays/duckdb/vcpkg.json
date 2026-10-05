@@ -1,6 +1,7 @@
 {
   "name": "duckdb",
   "version": "1.5.6",
+  "port-version": 5,
   "description": "High-performance in-process analytical database system",
   "homepage": "https://github.com/duckdb/duckdb/releases",
   "license": null,

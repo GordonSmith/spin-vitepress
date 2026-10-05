@@ -4,8 +4,7 @@
             "name": "duckdb",
             "default-features": false,
             "features": [
-                "autocomplete",
-                "json"
+                "httpfs"
             ]
         },
         {

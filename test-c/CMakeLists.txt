@@ -6,8 +6,8 @@ set(CMAKE_TOOLCHAIN_FILE ${VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake)
 set(VCPKG_INSTALLED_DIR "${VCPKG_BUILD_ROOT}/vcpkg_installed")
 set(VCPKG_INSTALL_OPTIONS "--x-abi-tools-use-exact-versions;--downloads-root=${VCPKG_BUILD_ROOT}/vcpkg_downloads;--x-buildtrees-root=${VCPKG_BUILD_ROOT}/vcpkg_buildtrees;--x-packages-root=${VCPKG_BUILD_ROOT}/vcpkg_packages")
 set(VCPKG_INCLUDE_DIR ${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/include)
-set(VCPKG_OVERLAY_PORTS ${CMAKE_SOURCE_DIR}/../vcpkg-overlays)
-set(VCPKG_OVERLAY_TRIPLETS ${CMAKE_SOURCE_DIR}/../vcpkg-overlays)
+set(VCPKG_OVERLAY_PORTS ${CMAKE_SOURCE_DIR}/../vcpkg_overlays)
+set(VCPKG_OVERLAY_TRIPLETS ${CMAKE_SOURCE_DIR}/../vcpkg_overlays)
 
 # try_compile runs from a scratch dir, so a relative chainload path would not resolve there.
 if(VCPKG_CHAINLOAD_TOOLCHAIN_FILE)
@@ -17,8 +17,8 @@ endif()
 
 project(HelloWasm VERSION 0.1.0)
 
-find_package(DuckDB CONFIG REQUIRED)
-find_package(nlohmann_json CONFIG REQUIRED)
+find_package(DuckDB CONFIG REQUIRED NO_CMAKE_FIND_ROOT_PATH)
+find_package(nlohmann_json CONFIG REQUIRED NO_CMAKE_FIND_ROOT_PATH)
 
 # set(WASI_SDK_DIR ../wasi-sdk)
 # set(CMAKE_C_COMPILER ${WASI_SDK_DIR}/bin/clang)
@@ -40,9 +40,25 @@ add_executable(http_root_world.wasm
     ${CMAKE_CURRENT_BINARY_DIR}/spin3_http_component_type.o
 )
 
+target_compile_options(http_root_world.wasm PRIVATE
+    -fwasm-exceptions
+    -mllvm
+    -wasm-use-legacy-eh=false
+)
+target_link_options(http_root_world.wasm PRIVATE
+    -fwasm-exceptions
+    # Reactor: static constructors run via _initialize; a command only runs them from _start, which Spin never calls.
+    -mexec-model=reactor
+    -Wl,--strip-debug
+)
+
 target_link_libraries(http_root_world.wasm
     PRIVATE $<IF:$<TARGET_EXISTS:duckdb>,duckdb,duckdb_static>
     PRIVATE nlohmann_json::nlohmann_json
+    PRIVATE unwind
+    PRIVATE wasi-emulated-mman
+    PRIVATE wasi-emulated-getpid
+    PRIVATE wasi-emulated-signal
 )
 
 target_include_directories(http_root_world.wasm 

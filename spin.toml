@@ -12,6 +12,11 @@ oauth_client_secret = { default = "", secret = true }
 oauth_scope = { default = "read:user" }
 oauth_redirect_uri = { default = "" }
 oauth_admins = { default = "GordonSmith" }
+s3_endpoint = { default = "" }
+s3_bucket = { default = "" }
+s3_label = { default = "" }
+s3_access_key = { default = "", secret = true }
+s3_secret_key = { default = "", secret = true }
 
 [[trigger.http]]
 route = "/..."
@@ -30,10 +35,17 @@ component = "test-c"
 
 [component.test-c]
 source = "test-c/build/http_root_world.wasm"
-# allowed_outbound_hosts = ["http://test-oauth.spin.internal"]
+allowed_outbound_hosts = ["https://spin-poc.gb-lon-1.linodeobjects.com"]
+
+[component.test-c.variables]
+s3_endpoint = "{{ s3_endpoint }}"
+s3_bucket = "{{ s3_bucket }}"
+s3_label = "{{ s3_label }}"
+s3_access_key = "{{ s3_access_key }}"
+s3_secret_key = "{{ s3_secret_key }}"
 
 [component.test-c.build]
-command = "cmake -S . -B ./build -DCMAKE_TOOLCHAIN_FILE=../vcpkg/scripts/buildsystems/vcpkg.cmake -DVCPKG_TARGET_TRIPLET=wasm32-wasip1 -DVCPKG_CHAINLOAD_TOOLCHAIN_FILE=../wasi-sdk/share/cmake/wasi-sdk-p1.cmake -DCMAKE_BUILD_TYPE=MinSizeRel && cmake --build ./build"
+command = "cmake -S . -B ./build -DCMAKE_TOOLCHAIN_FILE=$PWD/../vcpkg/scripts/buildsystems/vcpkg.cmake -DVCPKG_CHAINLOAD_TOOLCHAIN_FILE=$PWD/../wasi-sdk/share/cmake/wasi-sdk-p3.cmake -DVCPKG_OVERLAY_PORTS=$PWD/../vcpkg_overlays -DVCPKG_OVERLAY_TRIPLETS=$PWD/../vcpkg_overlays -DVCPKG_TARGET_TRIPLET=wasm32-wasip3 -DCMAKE_BUILD_TYPE=MinSizeRel && cmake --build ./build"
 watch = ["**/*.c*"]
 workdir = "test-c"
 

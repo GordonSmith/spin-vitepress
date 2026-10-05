@@ -4,7 +4,12 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
+#include <algorithm>
+#include <vector>
 #include <duckdb.hpp>
+#include <duckdb/common/http_util.hpp>
+#include <duckdb/main/config.hpp>
+#include <duckdb/httpfs/httpfs_client.hpp>
 #include "spin3_http.h"
 
 #define MAX_PATH 1024
@@ -33,6 +38,314 @@ static const struct
 // Chained requests bypass the `/auth/...` route, so the oauth component sees the raw path.
 #define AUTH_USER_PATH "/user"
 #define UNAUTHORIZED_MESSAGE "401 Unauthorized: please sign in at /auth to view this page.\n"
+
+static std::string sql_string(const char *value)
+{
+    std::string quoted = "'";
+    for (const char *ptr = value; *ptr; ++ptr)
+    {
+        quoted += *ptr == '\'' ? "''" : std::string(1, *ptr);
+    }
+    return quoted + "'";
+}
+
+class SpinHTTPClient : public duckdb::HTTPClient
+{
+public:
+    explicit SpinHTTPClient(const duckdb::string &base_url) : HTTPClient(base_url) {}
+
+    void Initialize(duckdb::HTTPParams &) override {}
+
+    duckdb::unique_ptr<duckdb::HTTPResponse> Get(duckdb::GetRequestInfo &info) override
+    {
+        return Request(info, WASI_HTTP_TYPES_METHOD_GET, info.response_handler, info.content_handler);
+    }
+
+    duckdb::unique_ptr<duckdb::HTTPResponse> Head(duckdb::HeadRequestInfo &info) override
+    {
+        return Request(info, WASI_HTTP_TYPES_METHOD_HEAD);
+    }
+
+    duckdb::unique_ptr<duckdb::HTTPResponse> Put(duckdb::PutRequestInfo &) override { return Unsupported(); }
+    duckdb::unique_ptr<duckdb::HTTPResponse> Delete(duckdb::DeleteRequestInfo &) override { return Unsupported(); }
+    duckdb::unique_ptr<duckdb::HTTPResponse> Post(duckdb::PostRequestInfo &) override { return Unsupported(); }
+
+private:
+    duckdb::unique_ptr<duckdb::HTTPResponse> Unsupported()
+    {
+        auto response = duckdb::make_uniq<duckdb::HTTPResponse>(duckdb::HTTPStatusCode::NotImplemented_501);
+        response->request_error = "Spin DuckDB HTTP transport only supports GET and HEAD";
+        return response;
+    }
+
+    duckdb::unique_ptr<duckdb::HTTPResponse> Request(
+        duckdb::BaseRequest &info,
+        uint8_t method_tag,
+        const std::function<bool(const duckdb::HTTPResponse &)> &response_handler = {},
+        const std::function<bool(duckdb::const_data_ptr_t, duckdb::idx_t)> &content_handler = {})
+    {
+        fprintf(stderr, "[DEBUG-parquet-http] method=%u url=%s range=%s\n",
+                method_tag,
+                info.url.c_str(),
+                info.headers.HasHeader("Range") ? info.headers.GetHeaderValue("Range").c_str() : "none");
+        wasi_http_types_own_fields_t fields = wasi_http_types_constructor_fields();
+        wasi_http_types_borrow_fields_t borrowed_fields = wasi_http_types_borrow_fields(fields);
+        for (const auto &header : duckdb::BaseRequest::MergeHeaders(info.headers, info.params))
+        {
+            wasi_http_types_field_name_t name;
+            wasi_http_types_field_value_t value;
+            wasi_http_types_header_error_t header_error;
+            spin3_http_string_set(&name, header.first.c_str());
+            spin3_http_string_set(reinterpret_cast<spin3_http_string_t *>(&value), header.second.c_str());
+            wasi_http_types_method_fields_append(borrowed_fields, &name, &value, &header_error);
+        }
+
+        wasi_http_types_own_outgoing_request_t request = wasi_http_types_constructor_outgoing_request(fields);
+        wasi_http_types_borrow_outgoing_request_t borrowed_request = wasi_http_types_borrow_outgoing_request(request);
+        wasi_http_types_method_t method = {.tag = method_tag};
+        wasi_http_types_scheme_t scheme;
+        duckdb::string path;
+        duckdb::string protocol_and_authority;
+        duckdb::HTTPUtil::DecomposeURL(info.url, path, protocol_and_authority);
+        const bool https = protocol_and_authority.rfind("https://", 0) == 0;
+        scheme.tag = https ? WASI_HTTP_TYPES_SCHEME_HTTPS : WASI_HTTP_TYPES_SCHEME_HTTP;
+        duckdb::string authority = protocol_and_authority.substr(https ? 8 : 7);
+        spin3_http_string_t wit_path;
+        spin3_http_string_t wit_authority;
+        spin3_http_string_set(&wit_path, path.c_str());
+        spin3_http_string_set(&wit_authority, authority.c_str());
+        wasi_http_types_method_outgoing_request_set_method(borrowed_request, &method);
+        wasi_http_types_method_outgoing_request_set_scheme(borrowed_request, &scheme);
+        wasi_http_types_method_outgoing_request_set_authority(borrowed_request, &wit_authority);
+        wasi_http_types_method_outgoing_request_set_path_with_query(borrowed_request, &wit_path);
+
+        wasi_http_types_own_future_incoming_response_t future;
+        wasi_http_outgoing_handler_error_code_t handler_error;
+        if (!wasi_http_outgoing_handler_handle(request, NULL, &future, &handler_error))
+        {
+            auto response = duckdb::make_uniq<duckdb::HTTPResponse>(duckdb::HTTPStatusCode::INVALID);
+            response->request_error = "Spin wasi:http rejected the outgoing request";
+            wasi_http_outgoing_handler_error_code_free(&handler_error);
+            return response;
+        }
+
+        auto borrowed_future = wasi_http_types_borrow_future_incoming_response(future);
+        auto pollable = wasi_http_types_method_future_incoming_response_subscribe(borrowed_future);
+        wasi_io_poll_method_pollable_block(wasi_io_poll_borrow_pollable(pollable));
+        wasi_io_poll_pollable_drop_own(pollable);
+
+        wasi_http_types_result_result_own_incoming_response_error_code_void_t result;
+        if (!wasi_http_types_method_future_incoming_response_get(borrowed_future, &result) ||
+            result.is_err || result.val.ok.is_err)
+        {
+            auto response = duckdb::make_uniq<duckdb::HTTPResponse>(duckdb::HTTPStatusCode::INVALID);
+            response->request_error = "Spin wasi:http request failed";
+            wasi_http_types_result_result_own_incoming_response_error_code_void_free(&result);
+            wasi_http_types_future_incoming_response_drop_own(future);
+            return response;
+        }
+
+        wasi_http_types_own_incoming_response_t incoming = result.val.ok.val.ok;
+        auto borrowed_incoming = wasi_http_types_borrow_incoming_response(incoming);
+        auto status = wasi_http_types_method_incoming_response_status(borrowed_incoming);
+        auto response = duckdb::make_uniq<duckdb::HTTPResponse>(static_cast<duckdb::HTTPStatusCode>(status));
+        response->url = info.url;
+        response->reason = duckdb::HTTPUtil::GetStatusMessage(static_cast<duckdb::HTTPStatusCode>(status));
+
+        auto response_headers = wasi_http_types_method_incoming_response_headers(borrowed_incoming);
+        wasi_http_types_list_tuple2_field_name_field_value_t entries;
+        wasi_http_types_method_fields_entries(wasi_http_types_borrow_fields(response_headers), &entries);
+        for (size_t index = 0; index < entries.len; ++index)
+        {
+            response->headers.Insert(
+                duckdb::string(reinterpret_cast<const char *>(entries.ptr[index].f0.ptr), entries.ptr[index].f0.len),
+                duckdb::string(reinterpret_cast<const char *>(entries.ptr[index].f1.ptr), entries.ptr[index].f1.len));
+        }
+        wasi_http_types_list_tuple2_field_name_field_value_free(&entries);
+        wasi_http_types_fields_drop_own(response_headers);
+
+        bool read_body = !response_handler || response_handler(*response);
+        duckdb::idx_t delivered_bytes = 0;
+
+        wasi_http_types_own_incoming_body_t body;
+        if (read_body && method_tag != WASI_HTTP_TYPES_METHOD_HEAD &&
+            wasi_http_types_method_incoming_response_consume(borrowed_incoming, &body))
+        {
+            wasi_io_streams_own_input_stream_t stream;
+            if (wasi_http_types_method_incoming_body_stream(wasi_http_types_borrow_incoming_body(body), &stream))
+            {
+                auto borrowed_stream = wasi_io_streams_borrow_input_stream(stream);
+                while (true)
+                {
+                    spin3_http_list_u8_t chunk = {0};
+                    wasi_io_streams_stream_error_t stream_error;
+                    if (!wasi_io_streams_method_input_stream_blocking_read(borrowed_stream, 64 * 1024, &chunk, &stream_error))
+                    {
+                        if (stream_error.tag != WASI_IO_STREAMS_STREAM_ERROR_CLOSED)
+                        {
+                            response->request_error = "Spin wasi:http response body read failed";
+                        }
+                        wasi_io_streams_stream_error_free(&stream_error);
+                        break;
+                    }
+                    if (content_handler)
+                    {
+                        content_handler(chunk.ptr, chunk.len);
+                        delivered_bytes += chunk.len;
+                    }
+                    else
+                    {
+                        response->body.append(reinterpret_cast<const char *>(chunk.ptr), chunk.len);
+                    }
+                    spin3_http_list_u8_free(&chunk);
+                }
+                wasi_io_streams_input_stream_drop_own(stream);
+            }
+            wasi_http_types_incoming_body_drop_own(body);
+        }
+
+        fprintf(stderr, "[DEBUG-parquet-http] status=%u content-range=%s buffered=%zu delivered=%llu\n",
+                status,
+                response->headers.HasHeader("Content-Range")
+                    ? response->headers.GetHeaderValue("Content-Range").c_str()
+                    : "none",
+                response->body.size(),
+                (unsigned long long)delivered_bytes);
+
+        wasi_http_types_incoming_response_drop_own(incoming);
+        wasi_http_types_result_result_own_incoming_response_error_code_void_free(&result);
+        wasi_http_types_future_incoming_response_drop_own(future);
+        return response;
+    }
+};
+
+// Must derive from HTTPFSUtil so InitializeParameters yields the HTTPFSParams that httpfs casts to.
+class SpinHTTPUtil : public duckdb::HTTPFSUtil
+{
+public:
+    duckdb::string GetName() const override { return "WasmHTTPUtils"; }
+
+    duckdb::unique_ptr<duckdb::HTTPClient> InitializeClient(
+        duckdb::HTTPParams &, const duckdb::string &base_url) override
+    {
+        return duckdb::make_uniq<SpinHTTPClient>(base_url);
+    }
+};
+
+static bool get_spin_variable(const char *name, std::string &value)
+{
+    spin3_http_string_t variable_name;
+    spin3_http_string_t variable_value;
+    fermyon_spin_2_0_0_variables_error_t error;
+    spin3_http_string_set(&variable_name, name);
+    if (!fermyon_spin_2_0_0_variables_get(&variable_name, &variable_value, &error))
+    {
+        fermyon_spin_2_0_0_variables_error_free(&error);
+        return false;
+    }
+    value.assign(reinterpret_cast<const char *>(variable_value.ptr), variable_value.len);
+    spin3_http_string_free(&variable_value);
+    return true;
+}
+
+static void append_s3_metadata(FILE *out)
+{
+    std::string endpoint;
+    std::string bucket_host;
+    std::string bucket;
+    std::string access_key;
+    std::string secret_key;
+    if (!get_spin_variable("s3_endpoint", endpoint) ||
+        !get_spin_variable("s3_bucket", bucket_host) ||
+        !get_spin_variable("s3_label", bucket) ||
+        !get_spin_variable("s3_access_key", access_key) ||
+        !get_spin_variable("s3_secret_key", secret_key) ||
+        endpoint.empty() || bucket_host.empty() || bucket.empty() ||
+        access_key.empty() || secret_key.empty())
+    {
+        BUF_ADD("[S3 Metadata]\nSpin S3 variables are incomplete.\n\n");
+        return;
+    }
+
+    duckdb::DuckDB database(nullptr);
+    duckdb::DBConfig::GetConfig(*database.instance).SetHTTPUtil(duckdb::make_shared_ptr<SpinHTTPUtil>());
+    duckdb::Connection connection(database);
+    std::string create_secret =
+        "CREATE SECRET spin_s3 (TYPE S3, KEY_ID " + sql_string(access_key.c_str()) +
+        ", SECRET " + sql_string(secret_key.c_str()) +
+        ", ENDPOINT " + sql_string(endpoint.c_str()) +
+        ", URL_STYLE 'vhost', USE_SSL true)";
+    auto secret_result = connection.Query(create_secret);
+    if (secret_result->HasError())
+    {
+        BUF_ADD("[S3 Metadata]\nDuckDB S3 setup failed: %s\n\n", secret_result->GetError().c_str());
+        return;
+    }
+    connection.Query("SET force_download_threshold = 0");
+
+    std::string source = "s3://" + bucket + "/*";
+    auto metadata = connection.Query(
+        "SELECT file FROM glob(" + sql_string(source.c_str()) + ") ORDER BY file LIMIT 20");
+    BUF_ADD("[S3 Metadata]\nBucket: %s\n", bucket_host.c_str());
+    if (metadata->HasError())
+    {
+        BUF_ADD("DuckDB metadata read failed: %s\n\n", metadata->GetError().c_str());
+        return;
+    }
+
+    BUF_ADD("Objects: %llu\n", (unsigned long long)metadata->RowCount());
+    for (duckdb::idx_t row = 0; row < metadata->RowCount(); ++row)
+    {
+        BUF_ADD("%s\n", metadata->GetValue(0, row).ToString().c_str());
+    }
+    BUF_ADD("\n");
+
+    if (metadata->RowCount() == 0)
+    {
+        return;
+    }
+
+    std::string object_path = metadata->GetValue(0, 0).ToString();
+    auto schema = connection.Query(
+        "DESCRIBE SELECT * FROM read_parquet(" + sql_string(object_path.c_str()) + ")");
+    BUF_ADD("[File Schema]\nFile: %s\nFormat: Parquet\n", object_path.c_str());
+    if (schema->HasError())
+    {
+        BUF_ADD("DuckDB schema read failed: %s\n\n", schema->GetError().c_str());
+        return;
+    }
+
+    BUF_ADD("Columns: %llu\n", (unsigned long long)schema->RowCount());
+    for (duckdb::idx_t row = 0; row < schema->RowCount(); ++row)
+    {
+        BUF_ADD("%s | %s\n",
+                schema->GetValue(0, row).ToString().c_str(),
+                schema->GetValue(1, row).ToString().c_str());
+    }
+    BUF_ADD("\n");
+
+    // No SQL ORDER BY: DuckDB's VARCHAR sort-key decode faults on wasm32.
+    auto counts = connection.Query(
+        "SELECT category, COUNT(*) AS records FROM read_parquet(" + sql_string(object_path.c_str()) +
+        ") GROUP BY category");
+    BUF_ADD("[Records per Category]\n");
+    if (counts->HasError())
+    {
+        BUF_ADD("DuckDB aggregate failed: %s\n\n", counts->GetError().c_str());
+        return;
+    }
+    std::vector<std::pair<std::string, std::string>> rows;
+    for (duckdb::idx_t row = 0; row < counts->RowCount(); ++row)
+    {
+        rows.emplace_back(counts->GetValue(0, row).ToString(), counts->GetValue(1, row).ToString());
+    }
+    std::sort(rows.begin(), rows.end());
+    for (const auto &row : rows)
+    {
+        BUF_ADD("%s | %s\n", row.first.c_str(), row.second.c_str());
+    }
+    BUF_ADD("\n");
+}
 
 // Forwards the caller's cookies to /auth/user via Spin service chaining; 200 means signed in.
 static bool is_logged_in(wasi_http_types_borrow_fields_t req_hdrs)
@@ -192,6 +505,7 @@ void exports_wasi_http_incoming_handler_handle(
 
     BUF_ADD("*** Spin with C++ http req/resp ***\n\n");
     BUF_ADD("DuckDB version: %s\n\n", duckdb::DuckDB::LibraryVersion());
+    append_s3_metadata(out);
 
     BUF_ADD("[Request Info]\n");
     wasi_http_types_method_incoming_request_path_with_query(b_req, &prstr);

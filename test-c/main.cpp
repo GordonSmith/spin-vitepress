@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
+#include <duckdb.hpp>
 #include "spin3_http.h"
 
 #define MAX_PATH 1024
@@ -190,6 +191,7 @@ void exports_wasi_http_incoming_handler_handle(
     out = open_memstream(&out_ptr, &size);
 
     BUF_ADD("*** Spin with C++ http req/resp ***\n\n");
+    BUF_ADD("DuckDB version: %s\n\n", duckdb::DuckDB::LibraryVersion());
 
     BUF_ADD("[Request Info]\n");
     wasi_http_types_method_incoming_request_path_with_query(b_req, &prstr);

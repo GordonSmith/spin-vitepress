@@ -1,0 +1,15 @@
+#!/bin/bash
+
+# List of current version can be found in https://github.com/microsoft/vcpkg/releases  ---
+# UPDATE README.md
+VCPKG_BUILD_TOOLS_VERSION=2026.07.29
+
+if [ ! -d "./vcpkg" ] 
+then
+    git clone --branch "$VCPKG_BUILD_TOOLS_VERSION" --depth 1 https://github.com/microsoft/vcpkg.git
+fi
+cd ./vcpkg
+git checkout $VCPKG_BUILD_TOOLS_VERSION
+./bootstrap-vcpkg.sh
+cd ..
+./vcpkg/vcpkg install --triplet=wasm32-wasip1 --x-abi-tools-use-exact-versions --downloads-root=./build/vcpkg_downloads --x-buildtrees-root=./build/vcpkg_buildtrees --x-packages-root=./build/vcpkg_packages --x-install-root=./build/vcpkg_installed

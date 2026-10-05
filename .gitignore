@@ -1,8 +1,10 @@
 .spin/logs
 .vitepress/cache/
 .vitepress/dist/
+build/
 node_modules/
 test-c/wit-full
 vcpkg/
+wasi-sdk/
 vcpkg_installed/
 .env

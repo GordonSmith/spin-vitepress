@@ -43,7 +43,7 @@ export default defineConfig({
     },
 
     cleanUrls: true,
-    srcExclude: ["vcpkg/**", "refs/**", "test-login/**"],
+    srcExclude: ["plan.md", "build/**", "emsdk/**", "vcpkg/**", "refs/**", "test-*/**"],
     transformPageData(pageData) {
         if (pageData.relativePath === "index.md") {
             pageData.frontmatter.hero.text = `Version ${spinVersion}`

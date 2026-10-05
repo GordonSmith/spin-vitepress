@@ -72,26 +72,25 @@ jobs:
           rustup default ${{ env.RUST_VERSION }}
           cargo install wit-bindgen-cli --version ${{ env.WIT_BINDGEN_VERSION }} --locked
 
-      - name: Restore vcpkg cache
+      - name: Restore C++ build dependencies
         uses: actions/cache@v6.1.0
         with:
           path: |
-            vcpkg/downloads
-            vcpkg/packages
-            vcpkg/buildtrees
-            vcpkg_installed
-          key: ${{ runner.os }}-vcpkg-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'vcpkg_overlays/**', 'test-c/CMakeLists.txt') }}
+            wasi-sdk
+            build/vcpkg_downloads
+            build/vcpkg_installed
+            ~/.cache/vcpkg/archives
+          key: ${{ runner.os }}-cpp-${{ hashFiles('scripts/cpp-install-wasi-sdk.sh', 'scripts/cpp-install-vcpkg.sh', 'vcpkg.json', 'vcpkg-configuration.json', 'vcpkg_overlays/**', 'test-c/CMakeLists.txt') }}
           restore-keys: |
-            ${{ runner.os }}-vcpkg-
-
-      - name: Install vcpkg dependencies
-        run: |
-          ./vcpkg/bootstrap-vcpkg.sh
-          ./vcpkg/vcpkg install
+            ${{ runner.os }}-cpp-
 
       - name: Install root Node dependencies
         run: |
           npm ci
+
+      - name: Install C++ build dependencies
+        run: |
+          npm run install-build-deps
 
       - name: Install test-ts Node dependencies
         working-directory: test-ts

@@ -21,6 +21,8 @@ A VitePress documentation site built with Spin WebAssembly components, demonstra
 
 - **Node.js**: Version 22 or higher
 
+- **Emscripten**: Install and activate the [Emscripten SDK](https://emscripten.org/docs/getting_started/downloads.html) so `emcc` is available on `PATH`
+
 - **Spin CLI**: Install from [Fermyon](https://developer.fermyon.com/spin/install)
   ```bash
   # Install Spin plugins
@@ -29,11 +31,10 @@ A VitePress documentation site built with Spin WebAssembly components, demonstra
   spin plugin install aka
   ```
 
-- **vcpkg**: For C/C++ dependencies (included as submodule)
+- **vcpkg**: For C/C++ dependencies
   ```bash
-  git submodule update --init --recursive
-  ./vcpkg/bootstrap-vcpkg.sh
-  ./vcpkg/vcpkg install
+   ./scripts/cpp-install-vcpkg.sh
+  ./vcpkg/vcpkg install --triplet wasm32-emscripten
   ```
 
 ### Building

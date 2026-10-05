@@ -33,7 +33,7 @@ source = "test-c/build/http_root_world.wasm"
 # allowed_outbound_hosts = ["http://test-oauth.spin.internal"]
 
 [component.test-c.build]
-command = "cmake -S . -B ./build -DCMAKE_TOOLCHAIN_FILE=../vcpkg_installed/x64-linux/wasi-sdk/share/cmake/wasi-sdk-p1.cmake -DCMAKE_BUILD_TYPE=MinSizeRel && cmake --build ./build"
+command = "cmake -S . -B ./build -DCMAKE_TOOLCHAIN_FILE=../vcpkg/scripts/buildsystems/vcpkg.cmake -DVCPKG_TARGET_TRIPLET=wasm32-wasip1 -DVCPKG_CHAINLOAD_TOOLCHAIN_FILE=../wasi-sdk/share/cmake/wasi-sdk-p1.cmake -DCMAKE_BUILD_TYPE=MinSizeRel && cmake --build ./build"
 watch = ["**/*.c*"]
 workdir = "test-c"
 

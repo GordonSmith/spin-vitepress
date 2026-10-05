@@ -6,5 +6,6 @@ node_modules/
 test-c/wit-full
 vcpkg/
 wasi-sdk/
+wasmtime/
 vcpkg_installed/
 .env

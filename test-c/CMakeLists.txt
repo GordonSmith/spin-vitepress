@@ -34,25 +34,27 @@ add_custom_command(
     COMMENT "Generating spin3_http_component_type.o"
 )
 
-add_executable(http_root_world.wasm
+add_executable(http_root_world_core.wasm
     ${CMAKE_CURRENT_SOURCE_DIR}/main.cpp
     ${CMAKE_CURRENT_BINARY_DIR}/spin3_http.c
     ${CMAKE_CURRENT_BINARY_DIR}/spin3_http_component_type.o
 )
 
-target_compile_options(http_root_world.wasm PRIVATE
+target_compile_options(http_root_world_core.wasm PRIVATE
     -fwasm-exceptions
     -mllvm
     -wasm-use-legacy-eh=false
 )
-target_link_options(http_root_world.wasm PRIVATE
+target_link_options(http_root_world_core.wasm PRIVATE
     -fwasm-exceptions
     # Reactor: static constructors run via _initialize; a command only runs them from _start, which Spin never calls.
     -mexec-model=reactor
     -Wl,--strip-debug
+    # Emit a core module so Wizer can snapshot it before it becomes a component.
+    -Wl,--skip-wit-component
 )
 
-target_link_libraries(http_root_world.wasm
+target_link_libraries(http_root_world_core.wasm
     PRIVATE $<IF:$<TARGET_EXISTS:duckdb>,duckdb,duckdb_static>
     PRIVATE nlohmann_json::nlohmann_json
     PRIVATE unwind
@@ -61,7 +63,31 @@ target_link_libraries(http_root_world.wasm
     PRIVATE wasi-emulated-signal
 )
 
-target_include_directories(http_root_world.wasm 
+target_include_directories(http_root_world_core.wasm 
     PRIVATE ${CMAKE_CURRENT_BINARY_DIR}
     PRIVATE ${VCPKG_INCLUDE_DIR}
 )
+
+find_program(WASMTIME wasmtime HINTS ${CMAKE_SOURCE_DIR}/../wasmtime REQUIRED)
+find_program(WASM_TOOLS wasm-tools REQUIRED)
+
+add_custom_command(
+    OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/wizer-env.wasm
+    COMMAND ${WASM_TOOLS} parse ${CMAKE_CURRENT_SOURCE_DIR}/wizer-env.wat -o ${CMAKE_CURRENT_BINARY_DIR}/wizer-env.wasm
+    DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/wizer-env.wat
+)
+
+# Snapshot the DuckDB instance built by `wizer-initialize`; `_initialize` becomes `wizer-resume` so ctors don't rerun.
+add_custom_command(
+    OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/http_root_world.wasm
+    COMMAND ${WASMTIME} wizer -W exceptions=y -W unknown-imports-trap=y
+        --preload env=${CMAKE_CURRENT_BINARY_DIR}/wizer-env.wasm
+        -r _initialize=wizer-resume
+        $<TARGET_FILE:http_root_world_core.wasm>
+        -o ${CMAKE_CURRENT_BINARY_DIR}/http_root_world_wizer.wasm
+    COMMAND ${WASM_TOOLS} component new ${CMAKE_CURRENT_BINARY_DIR}/http_root_world_wizer.wasm
+        -o ${CMAKE_CURRENT_BINARY_DIR}/http_root_world.wasm
+    DEPENDS http_root_world_core.wasm ${CMAKE_CURRENT_BINARY_DIR}/wizer-env.wasm
+    COMMENT "Pre-initializing http_root_world.wasm with Wizer"
+)
+add_custom_target(http_root_world ALL DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/http_root_world.wasm)

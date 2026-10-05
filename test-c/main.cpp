@@ -6,10 +6,15 @@
 #include <string.h>
 #include <algorithm>
 #include <vector>
+#include <algorithm>
+#include <vector>
 #include <duckdb.hpp>
 #include <duckdb/common/http_util.hpp>
 #include <duckdb/main/config.hpp>
 #include <duckdb/httpfs/httpfs_client.hpp>
+#define OPENSSL_SUPPRESS_DEPRECATED
+#include <openssl/crypto.h>
+#include <openssl/rand.h>
 #include "spin3_http.h"
 
 #define MAX_PATH 1024
@@ -84,10 +89,6 @@ private:
         const std::function<bool(const duckdb::HTTPResponse &)> &response_handler = {},
         const std::function<bool(duckdb::const_data_ptr_t, duckdb::idx_t)> &content_handler = {})
     {
-        fprintf(stderr, "[DEBUG-parquet-http] method=%u url=%s range=%s\n",
-                method_tag,
-                info.url.c_str(),
-                info.headers.HasHeader("Range") ? info.headers.GetHeaderValue("Range").c_str() : "none");
         wasi_http_types_own_fields_t fields = wasi_http_types_constructor_fields();
         wasi_http_types_borrow_fields_t borrowed_fields = wasi_http_types_borrow_fields(fields);
         for (const auto &header : duckdb::BaseRequest::MergeHeaders(info.headers, info.params))
@@ -165,7 +166,6 @@ private:
         wasi_http_types_fields_drop_own(response_headers);
 
         bool read_body = !response_handler || response_handler(*response);
-        duckdb::idx_t delivered_bytes = 0;
 
         wasi_http_types_own_incoming_body_t body;
         if (read_body && method_tag != WASI_HTTP_TYPES_METHOD_HEAD &&
@@ -191,7 +191,6 @@ private:
                     if (content_handler)
                     {
                         content_handler(chunk.ptr, chunk.len);
-                        delivered_bytes += chunk.len;
                     }
                     else
                     {
@@ -203,14 +202,6 @@ private:
             }
             wasi_http_types_incoming_body_drop_own(body);
         }
-
-        fprintf(stderr, "[DEBUG-parquet-http] status=%u content-range=%s buffered=%zu delivered=%llu\n",
-                status,
-                response->headers.HasHeader("Content-Range")
-                    ? response->headers.GetHeaderValue("Content-Range").c_str()
-                    : "none",
-                response->body.size(),
-                (unsigned long long)delivered_bytes);
 
         wasi_http_types_incoming_response_drop_own(incoming);
         wasi_http_types_result_result_own_incoming_response_error_code_void_free(&result);
@@ -232,6 +223,97 @@ public:
     }
 };
 
+// Plain pointer (no static ctor) so a Wizer snapshot keeps it across instantiation.
+static duckdb::DuckDB *warm_database;
+
+static duckdb::DuckDB &get_database()
+{
+    if (!warm_database)
+    {
+        warm_database = new duckdb::DuckDB(nullptr);
+        duckdb::DBConfig::GetConfig(*warm_database->instance).SetHTTPUtil(duckdb::make_shared_ptr<SpinHTTPUtil>());
+    }
+    return *warm_database;
+}
+
+extern "C" int __getentropy(void *buffer, size_t length);
+
+static bool wizer_snapshotting;
+
+static void fill_snapshot_bytes(void *buffer, size_t length)
+{
+    for (size_t i = 0; i < length; ++i)
+    {
+        static_cast<uint8_t *>(buffer)[i] = static_cast<uint8_t>(i * 131 + 17);
+    }
+}
+
+// Overrides wasi-libc's weak getentropy: host imports trap under Wizer, so fill deterministically there.
+extern "C" int getentropy(void *buffer, size_t length)
+{
+    if (wizer_snapshotting)
+    {
+        fill_snapshot_bytes(buffer, length);
+        return 0;
+    }
+    return __getentropy(buffer, length);
+}
+
+extern "C" int __clock_gettime(clockid_t clock, struct timespec *ts);
+
+// Overrides wasi-libc's weak clock_gettime for the same reason.
+extern "C" int clock_gettime(clockid_t clock, struct timespec *ts)
+{
+    if (wizer_snapshotting)
+    {
+        ts->tv_sec = 0;
+        ts->tv_nsec = 0;
+        return 0;
+    }
+    return __clock_gettime(clock, ts);
+}
+
+// Stands in for OpenSSL's DRBG while snapshotting so no seeded CSPRNG state is baked into the binary.
+static int snapshot_rand_bytes(unsigned char *buffer, int length)
+{
+    fill_snapshot_bytes(buffer, static_cast<size_t>(length));
+    return 1;
+}
+
+static int snapshot_rand_status(void) { return 1; }
+
+static const RAND_METHOD snapshot_rand_method = {
+    nullptr, snapshot_rand_bytes, nullptr, nullptr, snapshot_rand_bytes, snapshot_rand_status};
+
+extern "C" char **__wasilibc_environ;
+
+// Wizer drops the start function that sets the TLS base, so the snapshot value is restored on resume.
+extern "C" __attribute__((import_module("env"), import_name("__wasm_get_tls_base"))) void *wasm_get_tls_base(void);
+extern "C" __attribute__((import_module("env"), import_name("__wasm_set_tls_base"))) void wasm_set_tls_base(void *base);
+static void *snapshot_tls_base;
+
+// Run by Wizer at build time (after `_initialize`); the snapshot then replaces `_initialize` with `wizer-resume`.
+extern "C" __attribute__((export_name("wizer-initialize"))) void wizer_initialize(void)
+{
+    // An empty environ stops getenv from calling the host; (char **)-1 restores wasi-libc's lazy load.
+    static char *empty_environ[] = {nullptr};
+    __wasilibc_environ = empty_environ;
+    wizer_snapshotting = true;
+    // There is no openssl.cnf in the guest, and reading it would hit the host filesystem.
+    OPENSSL_init_crypto(OPENSSL_INIT_NO_LOAD_CONFIG, nullptr);
+    RAND_set_rand_method(&snapshot_rand_method);
+    get_database();
+    RAND_set_rand_method(nullptr);
+    wizer_snapshotting = false;
+    __wasilibc_environ = reinterpret_cast<char **>(-1);
+    snapshot_tls_base = wasm_get_tls_base();
+}
+
+extern "C" __attribute__((export_name("wizer-resume"))) void wizer_resume(void)
+{
+    wasm_set_tls_base(snapshot_tls_base);
+}
+
 static bool get_spin_variable(const char *name, std::string &value)
 {
     spin3_http_string_t variable_name;
@@ -248,7 +330,81 @@ static bool get_spin_variable(const char *name, std::string &value)
     return true;
 }
 
-static void append_s3_metadata(FILE *out)
+static void append_query_result(FILE *out, duckdb::MaterializedQueryResult &result)
+{
+    BUF_ADD("Rows: %llu\n", (unsigned long long)result.RowCount());
+    for (duckdb::idx_t col = 0; col < result.ColumnCount(); ++col)
+    {
+        BUF_ADD("%s%s", col ? " | " : "", result.ColumnName(col).c_str());
+    }
+    BUF_ADD("\n");
+    for (duckdb::idx_t row = 0; row < result.RowCount(); ++row)
+    {
+        for (duckdb::idx_t col = 0; col < result.ColumnCount(); ++col)
+        {
+            BUF_ADD("%s%s", col ? " | " : "", result.GetValue(col, row).ToString().c_str());
+        }
+        BUF_ADD("\n");
+    }
+    BUF_ADD("\n");
+}
+
+static int hex_value(char c)
+{
+    if (c >= '0' && c <= '9')
+        return c - '0';
+    if (c >= 'a' && c <= 'f')
+        return c - 'a' + 10;
+    if (c >= 'A' && c <= 'F')
+        return c - 'A' + 10;
+    return -1;
+}
+
+static std::string url_decode(const std::string &encoded)
+{
+    std::string decoded;
+    for (size_t i = 0; i < encoded.size(); ++i)
+    {
+        if (encoded[i] == '+')
+        {
+            decoded += ' ';
+        }
+        else if (encoded[i] == '%' && i + 2 < encoded.size() &&
+                 hex_value(encoded[i + 1]) >= 0 && hex_value(encoded[i + 2]) >= 0)
+        {
+            decoded += static_cast<char>(hex_value(encoded[i + 1]) * 16 + hex_value(encoded[i + 2]));
+            i += 2;
+        }
+        else
+        {
+            decoded += encoded[i];
+        }
+    }
+    return decoded;
+}
+
+// Finds `name` in an application/x-www-form-urlencoded string (query string or POST body).
+static bool get_form_param(const std::string &form, const char *name, std::string &value)
+{
+    size_t start = 0;
+    while (start <= form.size())
+    {
+        size_t end = form.find('&', start);
+        if (end == std::string::npos)
+            end = form.size();
+        std::string pair = form.substr(start, end - start);
+        size_t eq = pair.find('=');
+        if (url_decode(pair.substr(0, eq)) == name)
+        {
+            value = eq == std::string::npos ? "" : url_decode(pair.substr(eq + 1));
+            return true;
+        }
+        start = end + 1;
+    }
+    return false;
+}
+
+static void append_s3_metadata(FILE *out, const std::string &user_sql)
 {
     std::string endpoint;
     std::string bucket_host;
@@ -267,9 +423,7 @@ static void append_s3_metadata(FILE *out)
         return;
     }
 
-    duckdb::DuckDB database(nullptr);
-    duckdb::DBConfig::GetConfig(*database.instance).SetHTTPUtil(duckdb::make_shared_ptr<SpinHTTPUtil>());
-    duckdb::Connection connection(database);
+    duckdb::Connection connection(get_database());
     std::string create_secret =
         "CREATE SECRET spin_s3 (TYPE S3, KEY_ID " + sql_string(access_key.c_str()) +
         ", SECRET " + sql_string(secret_key.c_str()) +
@@ -282,6 +436,19 @@ static void append_s3_metadata(FILE *out)
         return;
     }
     connection.Query("SET force_download_threshold = 0");
+
+    if (!user_sql.empty())
+    {
+        BUF_ADD("[SQL]\n%s\n\n[Result]\n", user_sql.c_str());
+        auto user_result = connection.Query(user_sql);
+        if (user_result->HasError())
+        {
+            BUF_ADD("DuckDB query failed: %s\n\n", user_result->GetError().c_str());
+            return;
+        }
+        append_query_result(out, *user_result);
+        return;
+    }
 
     std::string source = "s3://" + bucket + "/*";
     auto metadata = connection.Query(
@@ -461,7 +628,6 @@ void exports_wasi_http_incoming_handler_handle(
     FILE *out;
     size_t size;
     char *out_ptr;
-    char *ptr;
     char clen[32];
     wasi_http_types_borrow_incoming_request_t b_req;
     wasi_http_types_own_headers_t hdrs;
@@ -485,10 +651,8 @@ void exports_wasi_http_incoming_handler_handle(
     wasi_http_types_list_tuple2_field_name_field_value_t fvk;
     wasi_http_types_own_input_stream_t in_stream;
     wasi_io_streams_borrow_input_stream_t b_in_stream;
-    spin3_http_list_u8_t data;
     wasi_io_streams_stream_error_t in_stream_err;
     spin3_http_string_t prstr;
-    size_t content_length = 0;
     bool ok;
 
     b_req = wasi_http_types_borrow_incoming_request(request);
@@ -501,88 +665,89 @@ void exports_wasi_http_incoming_handler_handle(
     //     return;
     // }
 
+    wasi_http_types_method_incoming_request_path_with_query(b_req, &prstr);
+    std::string path_with_query(reinterpret_cast<const char *>(prstr.ptr), prstr.len);
+    spin3_http_string_free(&prstr);
+    size_t query_start = path_with_query.find('?');
+    std::string query = query_start == std::string::npos ? "" : path_with_query.substr(query_start + 1);
+    wasi_http_types_method_incoming_request_method(b_req, &method);
+
+    bool form_body = false;
+    wasi_http_types_method_fields_entries(b_hdrs, &fvk);
+    for (size_t i = 0; i < fvk.len; i++)
+    {
+        if (fvk.ptr[i].f0.len == 12 && strncasecmp((const char *)fvk.ptr[i].f0.ptr, "Content-Type", 12) == 0)
+        {
+            std::string content_type((const char *)fvk.ptr[i].f1.ptr, fvk.ptr[i].f1.len);
+            form_body = content_type.rfind("application/x-www-form-urlencoded", 0) == 0;
+        }
+    }
+
+    std::string request_body;
+    std::string body_error;
+    if (wasi_http_types_method_incoming_request_consume(b_req, &r_body))
+    {
+        b_r_body = wasi_http_types_borrow_incoming_body(r_body);
+        if (wasi_http_types_method_incoming_body_stream(b_r_body, &in_stream))
+        {
+            b_in_stream = wasi_io_streams_borrow_input_stream(in_stream);
+            while (request_body.size() < MAX_READ_BYTES)
+            {
+                spin3_http_list_u8_t chunk = {0};
+                if (!wasi_io_streams_method_input_stream_blocking_read(
+                        b_in_stream, MAX_READ_BYTES - request_body.size(), &chunk, &in_stream_err))
+                {
+                    if (in_stream_err.tag != WASI_IO_STREAMS_STREAM_ERROR_CLOSED)
+                    {
+                        body_error = "Error reading request body";
+                    }
+                    wasi_io_streams_stream_error_free(&in_stream_err);
+                    break;
+                }
+                request_body.append(reinterpret_cast<const char *>(chunk.ptr), chunk.len);
+                spin3_http_list_u8_free(&chunk);
+            }
+            wasi_io_streams_input_stream_drop_own(in_stream);
+        }
+        wasi_http_types_incoming_body_drop_own(r_body);
+    }
+
+    // SQL comes from the query string (GET) or a form-encoded body (POST); the body wins if both are set.
+    std::string user_sql;
+    get_form_param(query, "SQL", user_sql);
+    if (method.tag == WASI_HTTP_TYPES_METHOD_POST && form_body)
+    {
+        get_form_param(request_body, "SQL", user_sql);
+    }
+
     out = open_memstream(&out_ptr, &size);
 
     BUF_ADD("*** Spin with C++ http req/resp ***\n\n");
     BUF_ADD("DuckDB version: %s\n\n", duckdb::DuckDB::LibraryVersion());
-    append_s3_metadata(out);
+    append_s3_metadata(out, user_sql);
 
     BUF_ADD("[Request Info]\n");
-    wasi_http_types_method_incoming_request_path_with_query(b_req, &prstr);
-    BUF_ADD("REQUEST_PATH = %.*s\n", (int)prstr.len, prstr.ptr);
-    wasi_http_types_method_incoming_request_method(b_req, &method);
+    BUF_ADD("REQUEST_PATH = %s\n", path_with_query.c_str());
     BUF_ADD("METHOD       = %s\n", http_method_map[method.tag].method);
-    ptr = static_cast<char *>(memchr(prstr.ptr, '?', prstr.len));
-    BUF_ADD("QUERY        = %.*s\n",
-            ptr ? (int)(((char *)(prstr.ptr + prstr.len)) - ptr - 1) : 0,
-            ptr ? ptr + 1 : "");
+    BUF_ADD("QUERY        = %s\n", query.c_str());
 
     BUF_ADD("\n[Request Headers]\n");
-
-    wasi_http_types_method_fields_entries(b_hdrs, &fvk);
     for (size_t i = 0; i < fvk.len; i++)
     {
         BUF_ADD("%.*s = %.*s\n",
                 (int)fvk.ptr[i].f0.len, fvk.ptr[i].f0.ptr,
                 (int)fvk.ptr[i].f1.len, fvk.ptr[i].f1.ptr);
-        if (fvk.ptr[i].f0.len == 14 && strncasecmp((const char *)fvk.ptr[i].f0.ptr, "Content-Length", 14) == 0)
-        {
-            content_length = atoll((const char *)fvk.ptr[i].f1.ptr);
-        }
     }
-
     wasi_http_types_list_tuple2_field_name_field_value_free(&fvk);
-
-    wasi_http_types_method_incoming_request_consume(b_req, &r_body);
-    b_r_body = wasi_http_types_borrow_incoming_body(r_body);
-    wasi_http_types_method_incoming_body_stream(b_r_body, &in_stream);
-    b_in_stream = wasi_io_streams_borrow_input_stream(in_stream);
-
-    data.ptr = (uint8_t *)malloc(content_length);
-    if (data.ptr == NULL)
-    {
-        fprintf(stderr, "Memory allocation failed for content length: %zu\n", content_length);
-    }
-    data.len = 0;
-    while (data.len < content_length)
-    {
-        size_t bytes_to_read = content_length - data.len;
-        if (bytes_to_read > MAX_READ_BYTES)
-        {
-            bytes_to_read = MAX_READ_BYTES;
-        }
-
-        spin3_http_list_u8_t temp_data = {0};
-        ok = wasi_io_streams_method_input_stream_blocking_read(b_in_stream, bytes_to_read, &temp_data, &in_stream_err);
-        if (!ok)
-        {
-            BUF_ADD("Error reading from stream: %d\n", in_stream_err.tag);
-            free(data.ptr);
-            break;
-        }
-        if (temp_data.len == 0)
-        {
-            // Unexpected end of stream
-            BUF_ADD("Stream ended prematurely. Expected %zu bytes, got %zu\n", content_length, data.len);
-            free(data.ptr);
-            break;
-        }
-
-        // Copy temp_data to data
-        memcpy(data.ptr + data.len, temp_data.ptr, temp_data.len);
-        data.len += temp_data.len;
-
-        spin3_http_list_u8_free(&temp_data);
-    }
 
     if (method.tag == WASI_HTTP_TYPES_METHOD_POST || method.tag == WASI_HTTP_TYPES_METHOD_PUT)
     {
         BUF_ADD("\n[%s data]\n", http_method_map[method.tag].method);
-        BUF_ADD("%.*s\n", (int)data.len, data.ptr);
-        if (data.len != content_length)
-        {
-            BUF_ADD("\nExpected content of length %zu, got %zu\n", content_length, data.len);
-        }
+        BUF_ADD("%s\n", request_body.c_str());
+    }
+    if (!body_error.empty())
+    {
+        BUF_ADD("\n%s\n", body_error.c_str());
     }
 
     fclose(out);
